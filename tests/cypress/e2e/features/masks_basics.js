@@ -628,6 +628,29 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
                 },
             });
             cy.get('.cvat-canvas-container').should('be.visible');
+            cy.get('.cvat-touch-tool-dock').should('be.visible').then(([$dock]) => {
+                cy.get('.cvat-canvas-container').then(([$canvas]) => {
+                    expect($dock.getBoundingClientRect().top).to.be.at.least(
+                        $canvas.getBoundingClientRect().bottom - 1,
+                    );
+                });
+            });
+            cy.get('.cvat-header').should('not.be.visible');
+            cy.get('.cvat-canvas-layer-stack-trigger').should('not.be.visible');
+            cy.get('.cvat-touch-tool-dock [aria-label="Draw"]').click();
+            cy.get('.cvat-touch-draw-tool-rail').should('be.visible');
+            cy.get('.ant-drawer-open').should('not.exist');
+            cy.contains('.cvat-touch-rail-button', 'Box').click();
+            cy.get('.cvat-touch-label-chip-active').should('contain.text', 'mask label');
+            cy.get('.cvat-touch-tool-dock [aria-label="Drawing settings"]').click();
+            cy.contains('.cvat-touch-draw-settings', 'Shape').should('be.visible');
+            cy.contains('.cvat-touch-rail-button', 'Mask').click();
+            cy.get('.cvat-touch-brush-size-control .ant-slider').should('be.visible')
+                .click('right');
+            cy.get('.cvat-touch-brush-size-value').invoke('text').then((value) => {
+                expect(Number(value)).to.be.greaterThan(10);
+            });
+            cy.get('.cvat-touch-tool-dock [aria-label="Cancel"]').click();
             cy.startMaskDrawing();
 
             cy.get('#cvat_canvas_wrapper')

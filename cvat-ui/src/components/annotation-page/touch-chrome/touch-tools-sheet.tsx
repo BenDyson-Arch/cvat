@@ -4,8 +4,8 @@
 
 import React, { useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import Drawer from 'antd/lib/drawer';
 import Text from 'antd/lib/typography/Text';
+import Button from 'antd/lib/button';
 
 import { Canvas } from 'cvat-canvas-wrapper';
 import { ActiveControl, CombinedState, Rotation } from 'reducers';
@@ -19,7 +19,7 @@ import ToolsControl from 'components/annotation-page/standard-workspace/controls
 import OpenCVControl from 'components/annotation-page/standard-workspace/controls-side-bar/opencv-control';
 import SnapToolsControl from 'components/annotation-page/standard-workspace/controls-side-bar/snap-tools-control';
 import Popover from 'antd/lib/popover';
-import { SettingOutlined } from '@ant-design/icons';
+import { CloseOutlined, SettingOutlined } from '@ant-design/icons';
 import ImageSetupsContent from 'components/annotation-page/canvas/views/canvas2d/image-setups-content';
 import SetupTagControl from 'components/annotation-page/standard-workspace/controls-side-bar/setup-tag-control';
 import MergeControl from 'components/annotation-page/standard-workspace/controls-side-bar/merge-control';
@@ -32,7 +32,7 @@ import { visibleShapesFromLabels } from './visible-shapes';
 
 export default function TouchToolsSheet(): JSX.Element {
     const dispatch = useDispatch();
-    const { toolsOpen, setToolsOpen } = useTouchChrome();
+    const { dockPanel, setDockPanel } = useTouchChrome();
     const {
         canvasInstance, activeControl, labels, frameData, normalizedKeyMap,
     } = useSelector((state: CombinedState) => ({
@@ -108,22 +108,21 @@ export default function TouchToolsSheet(): JSX.Element {
         }
     ), [activeControl, canvasInstance, dispatch]);
 
-    if (!(canvasInstance instanceof Canvas)) {
-        return (
-            <Drawer open={toolsOpen} onClose={() => setToolsOpen(false)} placement='bottom' title='Tools' />
-        );
+    if (!(canvasInstance instanceof Canvas) || dockPanel !== 'annotation-tools') {
+        return null;
     }
 
     return (
-        <Drawer
-            title='Tools'
-            placement='bottom'
-            height='auto'
-            open={toolsOpen}
-            onClose={() => setToolsOpen(false)}
-            className='cvat-touch-tools-sheet'
-            forceRender
-        >
+        <div className='cvat-touch-inline-tools'>
+            <div className='cvat-touch-inline-tools-heading'>
+                <Text strong>Tools</Text>
+                <Button
+                    type='text'
+                    icon={<CloseOutlined />}
+                    aria-label='Close tools'
+                    onClick={() => setDockPanel('primary')}
+                />
+            </div>
             <Text strong>View</Text>
             <div className='cvat-touch-tools-grid'>
                 <CursorControl
@@ -182,6 +181,6 @@ export default function TouchToolsSheet(): JSX.Element {
                     disabled={controlsDisabled}
                 />
             </div>
-        </Drawer>
+        </div>
     );
 }

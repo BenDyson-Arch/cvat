@@ -155,11 +155,16 @@ function CanvasLayout({ type }: { type?: DimensionType }): JSX.Element {
     }), shallowEqual);
 
     const computeRowHeight = (): number => {
+        const touchContent = window.document.querySelector(
+            '.cvat-standard-workspace-touch > .ant-layout-content',
+        );
         const header = window.document.querySelector(
             '.cvat-annotation-header, .cvat-touch-annotation-header',
         );
         let containerHeight = window.innerHeight;
-        if (header) {
+        if (touchContent) {
+            containerHeight = touchContent.getBoundingClientRect().height;
+        } else if (header) {
             containerHeight = window.innerHeight - header.getBoundingClientRect().bottom;
         } else {
             const content = window.document.querySelector('.cvat-annotation-layout-content');
@@ -207,9 +212,18 @@ function CanvasLayout({ type }: { type?: DimensionType }): JSX.Element {
             }
         };
 
+        const content = window.document.querySelector(
+            '.cvat-standard-workspace-touch > .ant-layout-content',
+        );
+        const resizeObserver = content && typeof ResizeObserver !== 'undefined' ?
+            new ResizeObserver(onResize) : null;
+        if (content && resizeObserver) {
+            resizeObserver.observe(content);
+        }
         window.addEventListener('resize', onResize);
         window.visualViewport?.addEventListener('resize', onResize);
         return () => {
+            resizeObserver?.disconnect();
             window.removeEventListener('resize', onResize);
             window.visualViewport?.removeEventListener('resize', onResize);
         };

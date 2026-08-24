@@ -6,13 +6,13 @@ import React, {
     createContext, useContext, useMemo, useState,
 } from 'react';
 
+export type TouchDockPanel = 'primary' | 'draw-tools' | 'draw-settings' | 'annotation-tools' | 'mask-settings';
+
 interface TouchChromeState {
     objectsOpen: boolean;
-    toolsOpen: boolean;
-    drawSheetOpen: boolean;
+    dockPanel: TouchDockPanel;
     setObjectsOpen(open: boolean): void;
-    setToolsOpen(open: boolean): void;
-    setDrawSheetOpen(open: boolean): void;
+    setDockPanel(panel: TouchDockPanel): void;
 }
 
 const TouchChromeContext = createContext<TouchChromeState | null>(null);
@@ -20,33 +20,24 @@ const TouchChromeContext = createContext<TouchChromeState | null>(null);
 export function TouchChromeProvider(props: { children: React.ReactNode }): JSX.Element {
     const { children } = props;
     const [objectsOpen, setObjectsOpenState] = useState(false);
-    const [toolsOpen, setToolsOpenState] = useState(false);
-    const [drawSheetOpen, setDrawSheetOpenState] = useState(false);
+    const [dockPanel, setDockPanelState] = useState<TouchDockPanel>('primary');
 
     const setObjectsOpen = (open: boolean): void => {
         setObjectsOpenState(open);
     };
-    const setToolsOpen = (open: boolean): void => {
-        setToolsOpenState(open);
-        if (open) {
-            setDrawSheetOpenState(false);
-        }
-    };
-    const setDrawSheetOpen = (open: boolean): void => {
-        setDrawSheetOpenState(open);
-        if (open) {
-            setToolsOpenState(false);
+    const setDockPanel = (panel: TouchDockPanel): void => {
+        setDockPanelState(panel);
+        if (panel !== 'primary') {
+            setObjectsOpenState(false);
         }
     };
 
     const value = useMemo(() => ({
         objectsOpen,
-        toolsOpen,
-        drawSheetOpen,
+        dockPanel,
         setObjectsOpen,
-        setToolsOpen,
-        setDrawSheetOpen,
-    }), [objectsOpen, toolsOpen, drawSheetOpen]);
+        setDockPanel,
+    }), [objectsOpen, dockPanel]);
 
     return (
         <TouchChromeContext.Provider value={value}>

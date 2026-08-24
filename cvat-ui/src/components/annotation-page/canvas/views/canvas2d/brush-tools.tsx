@@ -11,6 +11,7 @@ import Button from 'antd/lib/button';
 import Icon, { EyeInvisibleFilled, EyeOutlined, VerticalAlignBottomOutlined } from '@ant-design/icons';
 import InputNumber from 'antd/lib/input-number';
 import Select from 'antd/lib/select';
+import Slider from 'antd/lib/slider';
 import notification from 'antd/lib/notification';
 
 import { filterApplicableForType } from 'utils/filter-applicable-labels';
@@ -366,7 +367,26 @@ function BrushTools(): React.ReactPortal | null {
                     disabled={blockedTools['polygon-minus']}
                 />
             </CVATTooltip>
-            { ['brush', 'eraser'].includes(currentTool) ? (
+            { ['brush', 'eraser'].includes(currentTool) && touchLayout ? (
+                <div className='cvat-touch-brush-size-control'>
+                    <span
+                        className='cvat-touch-brush-size-preview'
+                        style={{
+                            width: Math.max(8, Math.min(34, brushSize / 3)),
+                            height: Math.max(8, Math.min(34, brushSize / 3)),
+                        }}
+                    />
+                    <Slider
+                        min={MIN_BRUSH_SIZE}
+                        max={200}
+                        step={1}
+                        value={brushSize}
+                        onChange={(value: number) => setBrushSize(value)}
+                    />
+                    <span className='cvat-touch-brush-size-value'>{brushSize}</span>
+                </div>
+            ) : null}
+            { ['brush', 'eraser'].includes(currentTool) && !touchLayout ? (
                 <CVATTooltip title='Brush size [Hold Alt + Right Mouse Click + Drag Left/Right]'>
                     <InputNumber
                         className='cvat-brush-tools-brush-size'
@@ -400,7 +420,7 @@ function BrushTools(): React.ReactPortal | null {
                     onClick={() => hideMask(!activeObjectHidden)}
                 />
             </CVATTooltip>
-            { !editableState && !!applicableLabels.length && (
+            { !touchLayout && !editableState && !!applicableLabels.length && (
                 <LabelSelector
                     labels={applicableLabels}
                     value={defaultLabelID}

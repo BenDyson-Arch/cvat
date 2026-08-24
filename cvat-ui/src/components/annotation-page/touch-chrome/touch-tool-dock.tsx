@@ -2,21 +2,20 @@
 //
 // SPDX-License-Identifier: MIT
 
-import React, { useCallback, useRef } from 'react';
-import { useDispatch, useSelector } from 'react-redux';
+import React, { useCallback } from 'react';
+import { useSelector } from 'react-redux';
 import Button from 'antd/lib/button';
 import Icon, {
-    AppstoreOutlined, CheckCircleOutlined, CloseCircleOutlined, DownOutlined, EditOutlined, UndoOutlined,
+    AppstoreOutlined, CheckCircleOutlined, CloseCircleOutlined, EditOutlined, SettingOutlined, UndoOutlined,
 } from '@ant-design/icons';
 import { CursorIcon, MoveIcon } from 'icons';
 
 import { ActiveControl, CombinedState } from 'reducers';
 import { Canvas } from 'cvat-canvas-wrapper';
-import { repeatDrawShapeAsync } from 'actions/annotation-actions';
 import { finishDraw, finishDrawAvailable } from 'utils/drawing';
 import { useTouchChrome } from './touch-chrome-context';
-import TouchDrawSheet from './touch-draw-sheet';
 import TouchToolsSheet from './touch-tools-sheet';
+import TouchDrawControls from './touch-draw-controls';
 
 export const TOUCH_DOCK_EXTRAS_ID = 'cvat-touch-dock-extras';
 
@@ -34,14 +33,10 @@ const DRAW_CONTROLS = new Set<ActiveControl>([
 ]);
 
 export default function TouchToolDock(): JSX.Element {
-    const dispatch = useDispatch();
-    const longPressTimer = useRef<number | null>(null);
-    const skipNextDrawClick = useRef(false);
-    const { setDrawSheetOpen, setToolsOpen, toolsOpen } = useTouchChrome();
-    const { canvasInstance, activeControl, activeShapeType } = useSelector((state: CombinedState) => ({
+    const { dockPanel, setDockPanel } = useTouchChrome();
+    const { canvasInstance, activeControl } = useSelector((state: CombinedState) => ({
         canvasInstance: state.annotation.canvas.instance,
         activeControl: state.annotation.canvas.activeControl,
-        activeShapeType: state.annotation.drawing.activeShapeType,
     }));
 
     const drawing = DRAW_CONTROLS.has(activeControl);
@@ -54,13 +49,6 @@ export default function TouchToolDock(): JSX.Element {
         ActiveControl.DRAW_POINTS,
         ActiveControl.DRAW_CUBOID,
     ].includes(activeControl);
-
-    const clearLongPress = (): void => {
-        if (longPressTimer.current !== null) {
-            window.clearTimeout(longPressTimer.current);
-            longPressTimer.current = null;
-        }
-    };
 
     const selectCursor = useCallback(() => {
         if (canvasInstance instanceof Canvas && activeControl !== ActiveControl.CURSOR) {
@@ -81,27 +69,16 @@ export default function TouchToolDock(): JSX.Element {
     }, [canvasInstance, activeControl]);
 
     const onDrawTap = useCallback(() => {
-        if (skipNextDrawClick.current) {
-            skipNextDrawClick.current = false;
-            return;
-        }
-        if (!(canvasInstance instanceof Canvas)) {
-            return;
-        }
-        if (drawing) {
-            canvasInstance.draw({ enabled: false });
-            return;
-        }
-        if (activeShapeType) {
-            dispatch(repeatDrawShapeAsync());
-            return;
-        }
-        setDrawSheetOpen(true);
-    }, [canvasInstance, drawing, activeShapeType, dispatch, setDrawSheetOpen]);
+        setDockPanel(dockPanel === 'draw-tools' ? 'primary' : 'draw-tools');
+    }, [dockPanel, setDockPanel]);
 
     return (
-        <>
-            <div className={`cvat-touch-tool-dock ${drawing ? 'cvat-touch-tool-dock-drawing' : ''}`}>
+        <div className={`cvat-touch-tool-dock ${drawing ? 'cvat-touch-tool-dock-drawing' : ''}`}>
+            {(drawing || ['draw-tools', 'draw-settings', 'mask-settings'].includes(dockPanel)) ? (
+                <TouchDrawControls />
+            ) : null}
+            <TouchToolsSheet />
+            <div className='cvat-touch-dock-primary-row'>
                 <div id={TOUCH_DOCK_EXTRAS_ID} className='cvat-touch-dock-extras' />
                 {drawing && canvasInstance instanceof Canvas ? (
                     <div className='cvat-touch-dock-session'>
@@ -142,33 +119,27 @@ export default function TouchToolDock(): JSX.Element {
                     >
                         <Icon component={CursorIcon} />
                     </Button>
-                    <div className={`cvat-touch-dock-draw ${drawing ? 'cvat-touch-dock-button-active' : ''}`}>
+                    <div className={`cvat-touch-dock-draw ${drawing || dockPanel === 'draw-tools' ? 'cvat-touch-dock-button-active' : ''}`}>
                         <Button
                             type='text'
                             className='cvat-touch-dock-button cvat-touch-dock-draw-main'
                             aria-label='Draw'
-                            onPointerDown={() => {
-                                clearLongPress();
-                                longPressTimer.current = window.setTimeout(() => {
-                                    longPressTimer.current = null;
-                                    skipNextDrawClick.current = true;
-                                    setDrawSheetOpen(true);
-                                }, 450);
-                            }}
-                            onPointerUp={clearLongPress}
-                            onPointerCancel={clearLongPress}
                             onClick={onDrawTap}
                         >
                             <EditOutlined />
                         </Button>
-                        <Button
-                            type='text'
-                            className='cvat-touch-dock-button cvat-touch-dock-draw-chevron'
-                            aria-label='Choose shape'
-                            onClick={() => setDrawSheetOpen(true)}
-                        >
-                            <DownOutlined />
-                        </Button>
+                        {drawing ? (
+                            <Button
+                                type='text'
+                                className='cvat-touch-dock-button cvat-touch-dock-draw-chevron'
+                                aria-label='Drawing settings'
+                                onClick={() => setDockPanel(
+                                    dockPanel === 'draw-settings' ? 'draw-tools' : 'draw-settings',
+                                )}
+                            >
+                                <SettingOutlined />
+                            </Button>
+                        ) : null}
                     </div>
                     <Button
                         type='text'
@@ -180,16 +151,16 @@ export default function TouchToolDock(): JSX.Element {
                     </Button>
                     <Button
                         type='text'
-                        className={`cvat-touch-dock-button ${toolsOpen ? 'cvat-touch-dock-button-active' : ''}`}
+                        className={`cvat-touch-dock-button ${dockPanel === 'annotation-tools' ? 'cvat-touch-dock-button-active' : ''}`}
                         aria-label='Tools'
-                        onClick={() => setToolsOpen(true)}
+                        onClick={() => setDockPanel(
+                            dockPanel === 'annotation-tools' ? 'primary' : 'annotation-tools',
+                        )}
                     >
                         <AppstoreOutlined />
                     </Button>
                 </div>
             </div>
-            <TouchDrawSheet />
-            <TouchToolsSheet />
-        </>
+        </div>
     );
 }
