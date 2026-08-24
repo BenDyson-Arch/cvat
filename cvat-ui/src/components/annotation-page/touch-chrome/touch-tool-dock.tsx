@@ -8,7 +8,7 @@ import Button from 'antd/lib/button';
 import Icon, {
     AppstoreOutlined, CheckCircleOutlined, CloseCircleOutlined, EditOutlined, SettingOutlined, UndoOutlined,
 } from '@ant-design/icons';
-import { CursorIcon, MoveIcon } from 'icons';
+import { CursorIcon } from 'icons';
 
 import { ActiveControl, CombinedState } from 'reducers';
 import { Canvas } from 'cvat-canvas-wrapper';
@@ -40,7 +40,6 @@ export default function TouchToolDock(): JSX.Element {
     }));
 
     const drawing = DRAW_CONTROLS.has(activeControl);
-    const panning = activeControl === ActiveControl.DRAG_CANVAS;
     const selecting = activeControl === ActiveControl.CURSOR;
     const canFinish = finishDrawAvailable(activeControl);
     const canUndoPoint = [
@@ -53,18 +52,6 @@ export default function TouchToolDock(): JSX.Element {
     const selectCursor = useCallback(() => {
         if (canvasInstance instanceof Canvas && activeControl !== ActiveControl.CURSOR) {
             canvasInstance.cancel();
-        }
-    }, [canvasInstance, activeControl]);
-
-    const togglePan = useCallback(() => {
-        if (!(canvasInstance instanceof Canvas)) {
-            return;
-        }
-        if (activeControl === ActiveControl.DRAG_CANVAS) {
-            canvasInstance.dragCanvas(false);
-        } else {
-            canvasInstance.cancel();
-            canvasInstance.dragCanvas(true);
         }
     }, [canvasInstance, activeControl]);
 
@@ -82,7 +69,7 @@ export default function TouchToolDock(): JSX.Element {
                 <div id={TOUCH_DOCK_EXTRAS_ID} className='cvat-touch-dock-extras' />
                 {drawing && canvasInstance instanceof Canvas ? (
                     <div className='cvat-touch-dock-session'>
-                        {canFinish ? (
+                        {canFinish && activeControl !== ActiveControl.DRAW_MASK ? (
                             <Button
                                 type='primary'
                                 className='cvat-touch-dock-button cvat-touch-dock-done'
@@ -141,14 +128,6 @@ export default function TouchToolDock(): JSX.Element {
                             </Button>
                         ) : null}
                     </div>
-                    <Button
-                        type='text'
-                        className={`cvat-touch-dock-button ${panning ? 'cvat-touch-dock-button-active' : ''}`}
-                        aria-label='Pan'
-                        onClick={togglePan}
-                    >
-                        <Icon component={MoveIcon} />
-                    </Button>
                     <Button
                         type='text'
                         className={`cvat-touch-dock-button ${dockPanel === 'annotation-tools' ? 'cvat-touch-dock-button-active' : ''}`}

@@ -858,6 +858,9 @@ export function undoActionAsync(): ThunkAction {
 
             // TODO: use affected IDs as an optimization
             const [undo] = state.annotation.annotations.history.undo.slice(-1);
+            if (!undo) {
+                return;
+            }
             const undoOnFrame = undo[1];
             const undoLog = await jobInstance.logger.log(
                 EventScope.undoAction,
@@ -897,6 +900,9 @@ export function redoActionAsync(): ThunkAction {
 
             // TODO: use affected IDs as an optimization
             const [redo] = state.annotation.annotations.history.redo.slice(-1);
+            if (!redo) {
+                return;
+            }
             const redoOnFrame = redo[1];
             const redoLog = await jobInstance.logger.log(
                 EventScope.redoAction,

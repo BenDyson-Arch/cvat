@@ -62,6 +62,7 @@ export class NativeTouchMasksHandler {
     private pendingPoints: RasterPoint[] = [];
     private animationFrame: number | null = null;
     private lastPoint: RasterPoint | null = null;
+    private lastPressure = 1;
     private startedAt = 0;
     private polygonDelegate: NativeMaskPolygonDelegate | null = null;
     private activePolygonTool: BrushTool['type'] | null = null;
@@ -198,6 +199,7 @@ export class NativeTouchMasksHandler {
             this.pointerID = pointer.pointerId;
             this.strokeBefore = this.snapshot();
             this.lastPoint = null;
+            this.lastPressure = 1;
             this.enqueuePointer(pointer);
             return;
         }
@@ -335,6 +337,7 @@ export class NativeTouchMasksHandler {
         this.strokeBefore = null;
         this.pendingPoints = [];
         this.lastPoint = null;
+        this.lastPressure = 1;
         this.drawData = null;
         this.tool = null;
         this.activePolygonTool = null;
@@ -478,7 +481,10 @@ export class NativeTouchMasksHandler {
     }
 
     private normalizePressure(pressure: number): number {
-        return Number.isFinite(pressure) && pressure > 0 ? Math.max(0.2, Math.min(1, pressure)) : 1;
+        if (Number.isFinite(pressure) && pressure > 0) {
+            this.lastPressure = Math.max(0.2, Math.min(1, pressure));
+        }
+        return this.lastPressure;
     }
 
     private snapshot(): ImageData {

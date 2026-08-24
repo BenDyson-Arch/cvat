@@ -184,6 +184,12 @@ export interface CanvasPointerRouterCallbacks extends PointerGestureCallbacks {
     drawPointer(event: NormalizedCanvasPointer): boolean;
 }
 
+function preventDefaultIfCancelable(event: PointerEvent): void {
+    if (event.cancelable) {
+        event.preventDefault();
+    }
+}
+
 /**
  * Sole pointer owner for native touch input. Mouse stays on the legacy lane.
  * Finger navigation and Pencil drawing cannot both consume the same pointer.
@@ -216,7 +222,7 @@ export class CanvasPointerRouter {
             const kind = isPenPointer(event) ? 'pen' : 'finger';
             if (kind === 'finger' && this.activePenPointerId !== null) {
                 this.ignoredPointers.add(event.pointerId);
-                event.preventDefault();
+                preventDefaultIfCancelable(event);
                 return true;
             }
             this.pointerKinds.set(event.pointerId, kind);
@@ -234,7 +240,7 @@ export class CanvasPointerRouter {
             }
         }
         if (this.ignoredPointers.has(event.pointerId)) {
-            event.preventDefault();
+            preventDefaultIfCancelable(event);
             if (phase === 'up' || phase === 'cancel') {
                 this.ignoredPointers.delete(event.pointerId);
             }
@@ -254,7 +260,7 @@ export class CanvasPointerRouter {
                 clientY: event.clientY,
                 canvasX,
                 canvasY,
-                pressure: penPressure(event, 1),
+                pressure: penPressure(event, ['up', 'cancel'].includes(phase) ? 0 : 1),
                 button: event.button,
                 buttons: event.buttons,
                 altKey: event.altKey,
@@ -263,7 +269,7 @@ export class CanvasPointerRouter {
                 raw: event,
             });
             if (consumed) {
-                event.preventDefault();
+                preventDefaultIfCancelable(event);
             } else if (phase === 'down') {
                 this.gestures.onPointerDown(event);
             } else if (phase === 'move') {
@@ -335,11 +341,11 @@ export class PointerGestureSession {
         }
 
         if (this.penDown) {
-            event.preventDefault();
+            preventDefaultIfCancelable(event);
             return true;
         }
 
-        event.preventDefault();
+        preventDefaultIfCancelable(event);
         this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
 
         if (this.touches.size === 1) {
@@ -373,7 +379,7 @@ export class PointerGestureSession {
             return false;
         }
 
-        event.preventDefault();
+        preventDefaultIfCancelable(event);
         this.touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
         this.updateMoved(event);
 
@@ -421,7 +427,7 @@ export class PointerGestureSession {
             return false;
         }
 
-        event.preventDefault();
+        preventDefaultIfCancelable(event);
 
         if (this.touches.size === 0) {
             const wasLongPress = this.longPressFired;

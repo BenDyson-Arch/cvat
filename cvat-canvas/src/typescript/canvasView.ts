@@ -389,7 +389,20 @@ export class CanvasViewImpl implements CanvasView, Listener {
             this.dispatchCanceledEvent();
         }
 
-        if (continueDraw) {
+        if (
+            continueDraw &&
+            this.configuration.nativeTouchInput &&
+            prevDrawData?.shapeType === 'mask'
+        ) {
+            window.setTimeout(() => {
+                this.controller.draw({
+                    ...prevDrawData,
+                    enabled: true,
+                    initialState: undefined,
+                    redraw: undefined,
+                });
+            }, 0);
+        } else if (continueDraw) {
             this.canvas.dispatchEvent(
                 new CustomEvent('canvas.drawstart', {
                     bubbles: false,

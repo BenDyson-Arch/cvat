@@ -645,10 +645,47 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
             cy.get('.cvat-touch-tool-dock [aria-label="Drawing settings"]').click();
             cy.contains('.cvat-touch-draw-settings', 'Shape').should('be.visible');
             cy.contains('.cvat-touch-rail-button', 'Mask').click();
+            cy.get('.cvat-touch-tool-dock [aria-label="Done"]').should('not.exist');
+            cy.get('.cvat-touch-tool-dock [aria-label="Pan"]').should('not.exist');
+            cy.get('.cvat-touch-tool-dock .cvat-brush-tools-polygon-plus').should('not.exist');
+            cy.get('.cvat-touch-tool-dock .cvat-brush-tools-polygon-minus').should('not.exist');
             cy.get('.cvat-touch-brush-size-control .ant-slider').should('be.visible')
                 .click('right');
             cy.get('.cvat-touch-brush-size-value').invoke('text').then((value) => {
                 expect(Number(value)).to.be.greaterThan(10);
+            });
+            cy.get('.cvat-touch-tool-dock .cvat-brush-tools-continue').click();
+            cy.get('.cvat_native_touch_masks_canvas:visible').should('exist');
+            cy.get('.cvat-touch-tool-dock .cvat-brush-tools-brush')
+                .should('have.class', 'cvat-brush-tools-active-tool');
+            cy.get('#cvat_canvas_wrapper')
+                .trigger('pointerdown', {
+                    pointerId: 70,
+                    pointerType: 'pen',
+                    pressure: 0.5,
+                    button: 0,
+                    buttons: 1,
+                    clientX: 350,
+                    clientY: 300,
+                })
+                .trigger('pointermove', {
+                    pointerId: 70,
+                    pointerType: 'pen',
+                    pressure: 0.5,
+                    button: -1,
+                    buttons: 1,
+                    clientX: 500,
+                    clientY: 300,
+                });
+            readNativeMaskPixelAlpha(425, 300).should('be.greaterThan', 0);
+            cy.get('#cvat_canvas_wrapper').trigger('pointerup', {
+                pointerId: 70,
+                pointerType: 'pen',
+                pressure: 0,
+                button: 0,
+                buttons: 0,
+                clientX: 500,
+                clientY: 300,
             });
             cy.get('.cvat-touch-tool-dock [aria-label="Cancel"]').click();
             cy.startMaskDrawing();
