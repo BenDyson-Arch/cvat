@@ -20,6 +20,7 @@ import BrushTools from 'components/annotation-page/canvas/views/canvas2d/brush-t
 import { isTouchLayout } from 'utils/pointer';
 import TouchToolDock from 'components/annotation-page/touch-chrome/touch-tool-dock';
 import TouchObjectsDrawer from 'components/annotation-page/touch-chrome/touch-objects-drawer';
+import { TOUCH_BRUSH_PALETTE_ID } from 'components/annotation-page/touch-chrome/constants';
 
 export default function StandardWorkspaceComponent(): JSX.Element {
     const touchLayout = isTouchLayout();
@@ -33,6 +34,7 @@ export default function StandardWorkspaceComponent(): JSX.Element {
             <CanvasLayout />
             {touchLayout ? (
                 <>
+                    <div id={TOUCH_BRUSH_PALETTE_ID} className='cvat-touch-brush-palette-host' />
                     <TouchToolDock />
                     <TouchObjectsDrawer objectsList={<ObjectsListContainer />} />
                 </>

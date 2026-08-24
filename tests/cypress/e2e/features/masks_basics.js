@@ -647,35 +647,118 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
             cy.get('.cvat-touch-mode-selector').click();
             cy.contains('.ant-dropdown-menu-item', 'Box').click();
             cy.get('.ant-drawer-open').should('not.exist');
-            cy.get('.cvat-touch-label-chip-active').should('contain.text', 'mask label');
+            cy.get('.cvat-touch-class-selector').should('contain.text', 'mask label');
             cy.get('.cvat-touch-tool-dock [aria-label="Drawing settings"]').click();
             cy.contains('.cvat-touch-draw-settings', 'Shape').should('be.visible');
             cy.get('.cvat-touch-mode-selector').click();
             cy.contains('.ant-dropdown-menu-item', 'Mask').click();
             cy.get('.cvat-touch-tool-dock [aria-label="Done"]').should('not.exist');
             cy.get('.cvat-touch-tool-dock [aria-label="Pan"]').should('not.exist');
+            cy.get('.cvat-touch-tool-dock [aria-label="Drawing settings"]').should('not.exist');
             cy.get('.cvat-touch-tool-dock .cvat-brush-tools-polygon-plus').should('not.exist');
             cy.get('.cvat-touch-tool-dock .cvat-brush-tools-polygon-minus').should('not.exist');
             cy.get('.cvat-touch-tool-dock .cvat-brush-tools-hide').should('not.exist');
+            cy.get('.cvat-touch-tool-dock .cvat-brush-tools-underlying-pixels').should('not.exist');
             cy.get('.cvat-touch-tool-dock .ant-select').should('not.exist');
-            cy.get('.cvat-touch-brush-size-control .ant-slider').should('be.visible')
-                .click('right');
-            cy.get('.cvat-touch-brush-size-value').invoke('text').then((value) => {
+            cy.get('.cvat-touch-brush-palette').should('be.visible').then(([$palette]) => {
+                cy.get('.cvat-canvas-container').then(([$canvas]) => {
+                    const canvasRect = $canvas.getBoundingClientRect();
+                    expect($palette.getBoundingClientRect().left).to.be.greaterThan(
+                        canvasRect.left + canvasRect.width / 2,
+                    );
+                });
+            });
+            cy.get('#cvat_canvas_wrapper')
+                .trigger('pointerdown', {
+                    pointerId: 60,
+                    pointerType: 'pen',
+                    pressure: 0.5,
+                    button: 0,
+                    buttons: 1,
+                    clientX: 320,
+                    clientY: 280,
+                })
+                .trigger('pointermove', {
+                    pointerId: 60,
+                    pointerType: 'pen',
+                    pressure: 0.5,
+                    buttons: 1,
+                    clientX: 480,
+                    clientY: 280,
+                })
+                .trigger('pointermove', {
+                    pointerId: 60,
+                    pointerType: 'pen',
+                    pressure: 0.5,
+                    buttons: 1,
+                    clientX: 480,
+                    clientY: 440,
+                })
+                .trigger('pointermove', {
+                    pointerId: 60,
+                    pointerType: 'pen',
+                    pressure: 0.5,
+                    buttons: 1,
+                    clientX: 320,
+                    clientY: 440,
+                })
+                .trigger('pointermove', {
+                    pointerId: 60,
+                    pointerType: 'pen',
+                    pressure: 0.5,
+                    buttons: 1,
+                    clientX: 320,
+                    clientY: 280,
+                })
+                .trigger('pointerup', {
+                    pointerId: 60,
+                    pointerType: 'pen',
+                    pressure: 0,
+                    button: 0,
+                    buttons: 0,
+                    clientX: 320,
+                    clientY: 280,
+                });
+            cy.get('.cvat-touch-brush-palette [aria-label="Fill enclosed area"]').click();
+            cy.get('#cvat_canvas_wrapper')
+                .trigger('pointerdown', {
+                    pointerId: 61,
+                    pointerType: 'pen',
+                    pressure: 0.5,
+                    button: 0,
+                    buttons: 1,
+                    clientX: 400,
+                    clientY: 360,
+                })
+                .trigger('pointerup', {
+                    pointerId: 61,
+                    pointerType: 'pen',
+                    pressure: 0,
+                    button: 0,
+                    buttons: 0,
+                    clientX: 400,
+                    clientY: 360,
+                });
+            readNativeMaskPixelAlpha(400, 360).should('be.greaterThan', 0);
+            cy.get('.cvat-touch-brush-palette [aria-label="Brush"]').click();
+            cy.get('.cvat-touch-brush-palette-size .ant-slider').should('be.visible')
+                .click('top');
+            cy.get('.cvat-touch-brush-palette .cvat-touch-brush-size-value').invoke('text').then((value) => {
                 expect(Number(value)).to.be.greaterThan(10);
             });
             cy.get('.cvat-touch-tool-dock .cvat-brush-tools-continue')
                 .should('have.class', 'ant-btn-primary')
                 .then(([$next]) => {
-                    cy.get('.cvat-touch-tool-dock').then(([$dock]) => {
-                        expect($next.getBoundingClientRect().right).to.be.closeTo(
-                            $dock.getBoundingClientRect().right,
-                            20,
+                    cy.get('.cvat-touch-tool-dock [aria-label="Cancel"]').then(([$cancel]) => {
+                        expect($next.getBoundingClientRect().right).to.be.lessThan(
+                            $cancel.getBoundingClientRect().left,
                         );
+                        expect($cancel).to.have.class('ant-btn-dangerous');
                     });
                 })
                 .click();
             cy.get('.cvat_native_touch_masks_canvas:visible').should('exist');
-            cy.get('.cvat-touch-tool-dock .cvat-brush-tools-brush')
+            cy.get('.cvat-touch-brush-palette .cvat-brush-tools-brush')
                 .should('have.class', 'cvat-brush-tools-active-tool');
             cy.get('#cvat_canvas_wrapper')
                 .trigger('pointerdown', {

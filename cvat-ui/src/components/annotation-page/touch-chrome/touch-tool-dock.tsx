@@ -12,12 +12,12 @@ import { CursorIcon } from 'icons';
 
 import { ActiveControl, CombinedState } from 'reducers';
 import { Canvas } from 'cvat-canvas-wrapper';
+import { ShapeType } from 'cvat-core-wrapper';
 import { finishDraw, finishDrawAvailable } from 'utils/drawing';
 import { useTouchChrome } from './touch-chrome-context';
 import TouchToolsSheet from './touch-tools-sheet';
 import TouchDrawControls from './touch-draw-controls';
-
-export const TOUCH_DOCK_EXTRAS_ID = 'cvat-touch-dock-extras';
+import { TOUCH_DOCK_EXTRAS_ID } from './constants';
 
 const DRAW_CONTROLS = new Set<ActiveControl>([
     ActiveControl.DRAW_RECTANGLE,
@@ -34,9 +34,10 @@ const DRAW_CONTROLS = new Set<ActiveControl>([
 
 export default function TouchToolDock(): JSX.Element {
     const { dockPanel, setDockPanel } = useTouchChrome();
-    const { canvasInstance, activeControl } = useSelector((state: CombinedState) => ({
+    const { canvasInstance, activeControl, activeShapeType } = useSelector((state: CombinedState) => ({
         canvasInstance: state.annotation.canvas.instance,
         activeControl: state.annotation.canvas.activeControl,
+        activeShapeType: state.annotation.drawing.activeShapeType,
     }));
 
     const drawing = DRAW_CONTROLS.has(activeControl);
@@ -73,7 +74,8 @@ export default function TouchToolDock(): JSX.Element {
                         <Icon component={CursorIcon} />
                     </Button>
                     <div id='cvat-touch-draw-selector' />
-                    {drawing ? (
+                    <div id='cvat-touch-class-selector' />
+                    {drawing && activeShapeType !== ShapeType.MASK ? (
                         <Button
                             type='text'
                             className='cvat-touch-dock-button cvat-touch-dock-draw-chevron'
@@ -96,37 +98,41 @@ export default function TouchToolDock(): JSX.Element {
                         <AppstoreOutlined />
                     </Button>
                 </div>
-                {drawing && canvasInstance instanceof Canvas ? (
-                    <div className='cvat-touch-dock-session'>
-                        {canFinish && activeControl !== ActiveControl.DRAW_MASK ? (
-                            <Button
-                                type='primary'
-                                className='cvat-touch-dock-button cvat-touch-dock-done'
-                                aria-label='Done'
-                                icon={<CheckCircleOutlined />}
-                                onClick={() => finishDraw(canvasInstance, activeControl)}
-                            />
-                        ) : null}
-                        {canUndoPoint ? (
-                            <Button
-                                type='text'
-                                className='cvat-touch-dock-button'
-                                aria-label='Undo point'
-                                icon={<UndoOutlined />}
-                                onClick={() => canvasInstance.undoDrawPoint()}
-                            />
-                        ) : null}
-                        <Button
-                            type='text'
-                            danger
-                            className='cvat-touch-dock-button cvat-touch-dock-cancel'
-                            aria-label='Cancel'
-                            icon={<CloseCircleOutlined />}
-                            onClick={() => canvasInstance.cancel()}
-                        />
-                    </div>
-                ) : null}
+                {drawing && canvasInstance instanceof Canvas && (
+                    (canFinish && activeControl !== ActiveControl.DRAW_MASK) || canUndoPoint
+                ) ? (
+                        <div className='cvat-touch-dock-session'>
+                            {canFinish && activeControl !== ActiveControl.DRAW_MASK ? (
+                                <Button
+                                    type='primary'
+                                    className='cvat-touch-dock-button cvat-touch-dock-done'
+                                    aria-label='Done'
+                                    icon={<CheckCircleOutlined />}
+                                    onClick={() => finishDraw(canvasInstance, activeControl)}
+                                />
+                            ) : null}
+                            {canUndoPoint ? (
+                                <Button
+                                    type='text'
+                                    className='cvat-touch-dock-button'
+                                    aria-label='Undo point'
+                                    icon={<UndoOutlined />}
+                                    onClick={() => canvasInstance.undoDrawPoint()}
+                                />
+                            ) : null}
+                        </div>
+                    ) : null}
                 <div id={TOUCH_DOCK_EXTRAS_ID} className='cvat-touch-dock-extras' />
+                {drawing && canvasInstance instanceof Canvas ? (
+                    <Button
+                        type='primary'
+                        danger
+                        className='cvat-touch-dock-button cvat-touch-dock-cancel'
+                        aria-label='Cancel'
+                        icon={<CloseCircleOutlined />}
+                        onClick={() => canvasInstance.cancel()}
+                    />
+                ) : null}
             </div>
         </div>
     );

@@ -8,7 +8,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { useDispatch, useSelector } from 'react-redux';
 import Button from 'antd/lib/button';
-import Icon, { EyeInvisibleFilled, EyeOutlined, VerticalAlignBottomOutlined } from '@ant-design/icons';
+import Icon, {
+    BgColorsOutlined, EyeInvisibleFilled, EyeOutlined, VerticalAlignBottomOutlined,
+} from '@ant-design/icons';
 import InputNumber from 'antd/lib/input-number';
 import Select from 'antd/lib/select';
 import Slider from 'antd/lib/slider';
@@ -33,7 +35,9 @@ import GlobalHotKeys from 'utils/mousetrap-react';
 import { subKeyMap } from 'utils/component-subkeymap';
 import { registerComponentShortcuts } from 'actions/shortcuts-actions';
 import { isTouchLayout } from 'utils/pointer';
-import { TOUCH_DOCK_EXTRAS_ID } from 'components/annotation-page/touch-chrome/touch-tool-dock';
+import {
+    TOUCH_BRUSH_PALETTE_ID, TOUCH_DOCK_EXTRAS_ID,
+} from 'components/annotation-page/touch-chrome/constants';
 import useDraggable from './draggable-hoc';
 
 const DraggableArea = (
@@ -75,7 +79,7 @@ const componentShortcuts = {
 registerComponentShortcuts(componentShortcuts);
 
 const MIN_BRUSH_SIZE = 1;
-function BrushTools(): React.ReactPortal | null {
+function BrushTools(): JSX.Element | React.ReactPortal | null {
     const dispatch = useDispatch();
     const {
         defaultLabelID, visible, canvasInstance, labels, activeObjectHidden, keyMap, normalizedKeyMap,
@@ -90,7 +94,9 @@ function BrushTools(): React.ReactPortal | null {
     }), shallowEqual);
 
     const [editableState, setEditableState] = useState<any | null>(null);
-    const [currentTool, setCurrentTool] = useState<'brush' | 'eraser' | 'polygon-plus' | 'polygon-minus'>('brush');
+    const [currentTool, setCurrentTool] = useState<
+        'brush' | 'eraser' | 'fill' | 'polygon-plus' | 'polygon-minus'
+    >('brush');
     const [brushForm, setBrushForm] = useState<'circle' | 'square'>('circle');
     const [[top, left], setTopLeft] = useState([0, 0]);
     const [brushSize, setBrushSize] = useState(10);
@@ -107,6 +113,7 @@ function BrushTools(): React.ReactPortal | null {
             setCurrentTool('eraser');
         }
     }, [setCurrentTool, blockedTools.eraser]);
+    const setFillTool = useCallback(() => setCurrentTool('fill'), [setCurrentTool]);
     const setPolygonTool = useCallback(() => setCurrentTool('polygon-plus'), [setCurrentTool]);
     const setPolygonRemoveTool = useCallback(() => {
         if (!blockedTools['polygon-minus']) {
@@ -127,6 +134,7 @@ function BrushTools(): React.ReactPortal | null {
 
     const [removeUnderlyingPixels, setRemoveUnderlyingPixels] = useState(false);
     const [touchHost, setTouchHost] = useState<HTMLElement | null>(null);
+    const [touchPaletteHost, setTouchPaletteHost] = useState<HTMLElement | null>(null);
     const dragBar = useDraggable(
         (): number[] => {
             const [element] = window.document.getElementsByClassName('cvat-brush-tools-toolbox');
@@ -217,6 +225,7 @@ function BrushTools(): React.ReactPortal | null {
     useEffect(() => {
         if (isTouchLayout()) {
             setTouchHost(window.document.getElementById(TOUCH_DOCK_EXTRAS_ID));
+            setTouchPaletteHost(window.document.getElementById(TOUCH_BRUSH_PALETTE_ID));
         }
     }, [visible]);
 
@@ -281,6 +290,101 @@ function BrushTools(): React.ReactPortal | null {
 
     const touchLayout = isTouchLayout();
     const portalTarget = touchHost || window.document.body;
+
+    if (touchLayout && (!touchHost || !touchPaletteHost)) {
+        return null;
+    }
+
+    if (touchLayout && touchHost && touchPaletteHost) {
+        return (
+            <>
+                {ReactDOM.createPortal((
+                    <div
+                        className='cvat-touch-brush-palette'
+                        style={{ display: visible ? '' : 'none' }}
+                        aria-label='Mask drawing tools'
+                    >
+                        <GlobalHotKeys
+                            keyMap={subKeyMap(componentShortcuts, keyMap)}
+                            handlers={handlers}
+                        />
+                        <Button
+                            type='text'
+                            aria-label='Brush'
+                            className={['cvat-brush-tools-brush', ...(currentTool === 'brush' ?
+                                ['cvat-brush-tools-active-tool'] : [])].join(' ')}
+                            icon={<Icon component={BrushIcon} />}
+                            onClick={setBrushTool}
+                        />
+                        <Button
+                            type='text'
+                            aria-label='Eraser'
+                            className={['cvat-brush-tools-eraser', ...(currentTool === 'eraser' ?
+                                ['cvat-brush-tools-active-tool'] : [])].join(' ')}
+                            icon={<Icon component={EraserIcon} />}
+                            onClick={setEraserTool}
+                            disabled={blockedTools.eraser}
+                        />
+                        <Button
+                            type='text'
+                            aria-label='Fill enclosed area'
+                            className={['cvat-brush-tools-fill', ...(currentTool === 'fill' ?
+                                ['cvat-brush-tools-active-tool'] : [])].join(' ')}
+                            icon={<BgColorsOutlined />}
+                            onClick={setFillTool}
+                        />
+                        {['brush', 'eraser'].includes(currentTool) ? (
+                            <div className='cvat-touch-brush-palette-size'>
+                                <span
+                                    className='cvat-touch-brush-size-preview'
+                                    style={{
+                                        width: Math.max(8, Math.min(34, brushSize / 3)),
+                                        height: Math.max(8, Math.min(34, brushSize / 3)),
+                                    }}
+                                />
+                                <Slider
+                                    vertical
+                                    min={MIN_BRUSH_SIZE}
+                                    max={200}
+                                    step={1}
+                                    value={brushSize}
+                                    onChange={(value: number) => setBrushSize(value)}
+                                />
+                                <span className='cvat-touch-brush-size-value'>{brushSize}</span>
+                            </div>
+                        ) : null}
+                    </div>
+                ), touchPaletteHost)}
+                {ReactDOM.createPortal((
+                    <div
+                        className='cvat-touch-next-action'
+                        style={{ display: visible && !editableState ? '' : 'none' }}
+                    >
+                        <CVATTooltip title={`Next ${normalizedKeyMap.SWITCH_REDRAW_MODE_STANDARD_CONTROLS}`}>
+                            <Button
+                                type='primary'
+                                aria-label='Next annotation'
+                                className='cvat-brush-tools-continue'
+                                icon={<Icon component={PlusIcon} />}
+                                onClick={() => {
+                                    if (canvasInstance instanceof Canvas && defaultLabelID) {
+                                        canvasInstance.draw({ enabled: false, continue: true });
+                                        dispatch(
+                                            rememberObject({
+                                                activeObjectType: ObjectType.SHAPE,
+                                                activeShapeType: ShapeType.MASK,
+                                                activeLabelID: defaultLabelID,
+                                            }),
+                                        );
+                                    }
+                                }}
+                            />
+                        </CVATTooltip>
+                    </div>
+                ), touchHost)}
+            </>
+        );
+    }
 
     return ReactDOM.createPortal((
         <div
@@ -387,12 +491,14 @@ function BrushTools(): React.ReactPortal | null {
                     <Select.Option value='square'>Square</Select.Option>
                 </Select>
             ) : null}
-            <Button
-                type='text'
-                className={['cvat-brush-tools-underlying-pixels', ...(removeUnderlyingPixels ? ['cvat-brush-tools-active-tool'] : [])].join(' ')}
-                icon={<VerticalAlignBottomOutlined />}
-                onClick={() => setRemoveUnderlyingPixels(!removeUnderlyingPixels)}
-            />
+            {!touchLayout ? (
+                <Button
+                    type='text'
+                    className={['cvat-brush-tools-underlying-pixels', ...(removeUnderlyingPixels ? ['cvat-brush-tools-active-tool'] : [])].join(' ')}
+                    icon={<VerticalAlignBottomOutlined />}
+                    onClick={() => setRemoveUnderlyingPixels(!removeUnderlyingPixels)}
+                />
+            ) : null}
             {!touchLayout ? (
                 <CVATTooltip title={`Hide mask ${normalizedKeyMap.SWITCH_HIDDEN}`}>
                     <Button

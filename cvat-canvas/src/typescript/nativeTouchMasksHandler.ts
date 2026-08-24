@@ -192,6 +192,26 @@ export class NativeTouchMasksHandler {
             return;
         }
 
+        if (this.tool?.type === 'fill') {
+            if (
+                pointer.phase === 'down' &&
+                this.pointerID === null &&
+                (pointer.button === 0 || pointer.buttons > 0)
+            ) {
+                this.pointerID = pointer.pointerId;
+                this.fillEnclosed(
+                    Math.round(pointer.canvasX - this.imageOffset),
+                    Math.round(pointer.canvasY - this.imageOffset),
+                );
+            } else if (
+                pointer.pointerId === this.pointerID &&
+                ['up', 'cancel'].includes(pointer.phase)
+            ) {
+                this.pointerID = null;
+            }
+            return;
+        }
+
         if (pointer.phase === 'down') {
             if (this.pointerID !== null || (pointer.button !== 0 && pointer.buttons === 0)) {
                 return;
@@ -258,6 +278,79 @@ export class NativeTouchMasksHandler {
         }
         this.context.closePath();
         this.context.fill();
+        this.context.restore();
+        this.undoStack.push(before);
+        this.redoStack = [];
+        this.updateBlockedTools();
+        return true;
+    }
+
+    public fillEnclosed(seedX: number, seedY: number): boolean {
+        if (!this.drawing || !this.tool || this.tool.type !== 'fill') {
+            return false;
+        }
+        const { width, height } = this.canvas;
+        if (seedX < 0 || seedY < 0 || seedX >= width || seedY >= height) {
+            return false;
+        }
+
+        const before = this.snapshot();
+        const visited = new Uint8Array(width * height);
+        const spans: [number, number, number][] = [];
+        const stack: [number, number][] = [[seedX, seedY]];
+        const isTransparent = (x: number, y: number): boolean => {
+            const index = y * width + x;
+            return !visited[index] && before.data[index * 4 + 3] === 0;
+        };
+
+        if (!isTransparent(seedX, seedY)) {
+            return false;
+        }
+
+        while (stack.length) {
+            const [x, y] = stack.pop() as [number, number];
+            if (!isTransparent(x, y)) {
+                continue;
+            }
+            let left = x;
+            let right = x;
+            while (left > 0 && isTransparent(left - 1, y)) {
+                left -= 1;
+            }
+            while (right < width - 1 && isTransparent(right + 1, y)) {
+                right += 1;
+            }
+            if (left === 0 || right === width - 1 || y === 0 || y === height - 1) {
+                return false;
+            }
+
+            for (let cursor = left; cursor <= right; cursor += 1) {
+                visited[y * width + cursor] = 1;
+            }
+            spans.push([y, left, right]);
+
+            for (const neighborY of [y - 1, y + 1]) {
+                let cursor = left;
+                while (cursor <= right) {
+                    while (cursor <= right && !isTransparent(cursor, neighborY)) {
+                        cursor += 1;
+                    }
+                    if (cursor <= right) {
+                        stack.push([cursor, neighborY]);
+                        while (cursor <= right && isTransparent(cursor, neighborY)) {
+                            cursor += 1;
+                        }
+                    }
+                }
+            }
+        }
+
+        this.context.save();
+        this.context.globalCompositeOperation = 'source-over';
+        this.context.fillStyle = this.tool.color;
+        for (const [y, left, right] of spans) {
+            this.context.fillRect(left, y, right - left + 1, 1);
+        }
         this.context.restore();
         this.undoStack.push(before);
         this.redoStack = [];
@@ -561,6 +654,6 @@ export class NativeTouchMasksHandler {
     }
 
     private isRasterTool(): boolean {
-        return this.tool?.type === 'brush' || this.tool?.type === 'eraser';
+        return ['brush', 'eraser', 'fill'].includes(this.tool?.type || '');
     }
 }

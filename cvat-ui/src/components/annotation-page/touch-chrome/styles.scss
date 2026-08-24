@@ -121,6 +121,70 @@ html.cvat-touch-layout {
     }
 }
 
+.cvat-touch-brush-palette-host {
+    position: absolute;
+    top: 50%;
+    right: calc(14px + env(safe-area-inset-right, 0px));
+    z-index: 110;
+    transform: translateY(-50%);
+    pointer-events: none;
+}
+
+.cvat-touch-brush-palette {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 6px;
+    border: 1px solid $border-color-1;
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 94%);
+    box-shadow: $box-shadow-base;
+    pointer-events: all;
+    touch-action: manipulation;
+
+    > button {
+        width: 46px;
+        min-width: 46px;
+        height: 46px;
+        padding: 0;
+        border-radius: 15px;
+        font-size: 20px;
+    }
+
+    .cvat-brush-tools-active-tool {
+        background: $header-color;
+    }
+}
+
+.cvat-touch-brush-palette-size {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    min-height: 210px;
+    padding-top: 4px;
+
+    .ant-slider-vertical {
+        height: 150px;
+        margin: 4px 8px;
+    }
+
+    .cvat-touch-brush-size-preview {
+        flex: none;
+        max-width: 34px;
+        max-height: 34px;
+        border-radius: 50%;
+        background: $text-color;
+    }
+
+    .cvat-touch-brush-size-value {
+        min-width: 34px;
+        font-variant-numeric: tabular-nums;
+        text-align: center;
+    }
+}
+
 .cvat-touch-tool-dock {
     position: relative;
     z-index: 5;
@@ -145,6 +209,15 @@ html.cvat-touch-layout {
         gap: 4px;
         width: 100%;
         min-width: 0;
+
+        button > .anticon {
+            font-size: 20px;
+
+            > svg {
+                width: 1em;
+                height: 1em;
+            }
+        }
     }
 
     .cvat-touch-dock-extras {
@@ -155,6 +228,17 @@ html.cvat-touch-layout {
         min-width: 0;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
+
+        .cvat-touch-next-action {
+            margin-left: auto;
+        }
+
+        .cvat-brush-tools-continue {
+            min-width: 44px;
+            min-height: 44px;
+            border-radius: 14px;
+            font-size: 20px;
+        }
     }
 
     .cvat-touch-dock-nav {
@@ -265,7 +349,15 @@ html.cvat-touch-layout {
         color: #fff;
     }
 
-    #cvat-touch-draw-selector {
+    .cvat-touch-dock-cancel {
+        flex: none;
+        border-color: #ff4d4f !important;
+        color: #fff !important;
+        background: #ff4d4f !important;
+    }
+
+    #cvat-touch-draw-selector,
+    #cvat-touch-class-selector {
         display: flex;
         flex: none;
     }
@@ -288,6 +380,24 @@ html.cvat-touch-layout {
     .cvat-touch-mode-selector-chevron {
         font-size: 10px;
         opacity: 0.65;
+    }
+
+    .cvat-touch-class-selector {
+        max-width: 170px;
+        height: 44px;
+        padding: 0 10px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        background: $header-color;
+    }
+
+    .cvat-touch-class-selector-name {
+        max-width: 110px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
     }
 
     .cvat-touch-dock-draw {
@@ -414,6 +524,18 @@ html.cvat-touch-layout {
         display: flex;
         align-items: center;
         justify-content: space-between;
+    }
+}
+
+.cvat-touch-class-menu-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+
+    .cvat-touch-label-color {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
     }
 }
 
