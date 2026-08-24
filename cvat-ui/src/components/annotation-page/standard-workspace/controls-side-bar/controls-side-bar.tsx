@@ -58,6 +58,7 @@ interface Props {
     pasteShape(): void;
     resetGroup(): void;
     redrawShape(): void;
+    hotkeysOnly?: boolean;
 }
 
 const componentShortcuts = {
@@ -159,6 +160,7 @@ export default function ControlsSideBarComponent(props: Props): JSX.Element {
         resetGroup,
         redrawShape,
         frameData,
+        hotkeysOnly,
     } = props;
 
     const controlsDisabled = !labels.length || frameData.deleted;
@@ -353,6 +355,12 @@ export default function ControlsSideBarComponent(props: Props): JSX.Element {
                 handleDrawMode(event, 'redraw');
             },
         };
+    }
+
+    if (hotkeysOnly) {
+        return (
+            <GlobalHotKeys keyMap={subKeyMap(componentShortcuts, keyMap)} handlers={handlers} />
+        );
     }
 
     return (

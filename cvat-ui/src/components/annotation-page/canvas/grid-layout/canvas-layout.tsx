@@ -155,18 +155,28 @@ function CanvasLayout({ type }: { type?: DimensionType }): JSX.Element {
     }), shallowEqual);
 
     const computeRowHeight = (): number => {
-        const container = window.document.getElementsByClassName('cvat-annotation-header')[0];
+        const header = window.document.querySelector(
+            '.cvat-annotation-header, .cvat-touch-annotation-header',
+        );
         let containerHeight = window.innerHeight;
-        if (container) {
-            containerHeight = window.innerHeight - container.getBoundingClientRect().bottom;
-            // https://github.com/react-grid-layout/react-grid-layout/issues/628#issuecomment-1228453084
-            return Math.floor(
-                (containerHeight - config.CANVAS_WORKSPACE_MARGIN * (config.CANVAS_WORKSPACE_ROWS)) /
-                config.CANVAS_WORKSPACE_ROWS,
-            );
+        if (header) {
+            containerHeight = window.innerHeight - header.getBoundingClientRect().bottom;
+        } else {
+            const content = window.document.querySelector('.cvat-annotation-layout-content');
+            if (content) {
+                containerHeight = content.getBoundingClientRect().height;
+            }
         }
 
-        return 0;
+        if (containerHeight <= 0) {
+            return 0;
+        }
+
+        // https://github.com/react-grid-layout/react-grid-layout/issues/628#issuecomment-1228453084
+        return Math.floor(
+            (containerHeight - config.CANVAS_WORKSPACE_MARGIN * (config.CANVAS_WORKSPACE_ROWS)) /
+            config.CANVAS_WORKSPACE_ROWS,
+        );
     };
 
     const getLayout = useCallback(() => (
@@ -198,8 +208,10 @@ function CanvasLayout({ type }: { type?: DimensionType }): JSX.Element {
         };
 
         window.addEventListener('resize', onResize);
+        window.visualViewport?.addEventListener('resize', onResize);
         return () => {
             window.removeEventListener('resize', onResize);
+            window.visualViewport?.removeEventListener('resize', onResize);
         };
     }, [fitCanvas]);
 

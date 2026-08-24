@@ -69,11 +69,18 @@ import { ImageFilter } from 'utils/image-processing';
 import { ShortcutScope } from 'utils/enums';
 import { registerComponentShortcuts } from 'actions/shortcuts-actions';
 import { subKeyMap } from 'utils/component-subkeymap';
+import { isTouchLayout } from 'utils/pointer';
 import ImageSetupsContent from './image-setups-content';
 import CanvasTipsComponent from './canvas-hints';
+import CanvasDrawActions from './canvas-draw-actions';
 
 const cvat = getCore();
 const MAX_DISTANCE_TO_OPEN_SHAPE = 50;
+const TOUCH_CONTROL_POINT_SIZE = 10;
+
+function resolveControlPointsSize(size: number): number {
+    return isTouchLayout() ? Math.max(size, TOUCH_CONTROL_POINT_SIZE) : size;
+}
 
 interface StateToProps {
     canvasInstance: Canvas | Canvas3d | null;
@@ -448,7 +455,7 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             showConflicts: showGroundTruth,
             intelligentPolygonCrop,
             selectedShapeOpacity: selectedOpacity,
-            controlPointsSize,
+            controlPointsSize: resolveControlPointsSize(controlPointsSize),
             shapeOpacity: opacity,
             smoothImage,
             colorBy,
@@ -541,7 +548,7 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
                 colorBy,
                 outlinedBorders: outlined ? outlineColor || 'black' : false,
                 textFontSize,
-                controlPointsSize,
+                controlPointsSize: resolveControlPointsSize(controlPointsSize),
                 textPosition,
                 textContent,
                 showConflicts: showGroundTruth,
@@ -1236,14 +1243,17 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
                     So, React isn't going to rerender it
                     And it's a reason why cvat-canvas appended in mount function works
                 */}
-                <div
-                    className='cvat-canvas-container'
-                    style={{
-                        overflow: 'hidden',
-                        width: '100%',
-                        height: '100%',
-                    }}
-                />
+                <div className='cvat-canvas-container-host'>
+                    <div
+                        className='cvat-canvas-container'
+                        style={{
+                            overflow: 'hidden',
+                            width: '100%',
+                            height: '100%',
+                        }}
+                    />
+                    <CanvasDrawActions />
+                </div>
 
                 <Popover
                     destroyTooltipOnHide

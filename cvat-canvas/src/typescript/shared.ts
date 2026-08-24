@@ -65,29 +65,133 @@ export interface DrawnState {
 // to the coordinate system of a client
 export function translateFromSVG(svg: SVGSVGElement, points: ArrayLike<number>): number[] {
     const output = [];
-    const transformationMatrix = svg.getScreenCTM() as DOMMatrix;
-    let pt = svg.createSVGPoint();
+    const ctm = svg.getScreenCTM();
+    if (!ctm) {
+        return Array.from(points);
+    }
+    const matrix = toDOMMatrix(ctm);
     for (let i = 0; i < points.length - 1; i += 2) {
-        pt.x = points[i];
-        pt.y = points[i + 1];
-        pt = pt.matrixTransform(transformationMatrix);
-        output.push(pt.x, pt.y);
+        const mapped = new DOMPoint(points[i], points[i + 1]).matrixTransform(matrix);
+        output.push(mapped.x, mapped.y);
     }
 
     return output;
 }
 
+function invertClientToSvg(svg: SVGSVGElement): DOMMatrix | null {
+    const parent = svg.parentElement;
+    if (!parent) {
+        return null;
+    }
+
+    const css = window.getComputedStyle(svg);
+    const width = Number.parseFloat(css.width);
+    const height = Number.parseFloat(css.height);
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+        return null;
+    }
+
+    const left = Number.parseFloat(css.left) || 0;
+    const top = Number.parseFloat(css.top) || 0;
+    const originParts = css.transformOrigin.split(/\s+/);
+    const originX = Number.parseFloat(originParts[0]);
+    const originY = Number.parseFloat(originParts[1]);
+    const cssMatrix = css.transform && css.transform !== 'none' ?
+        new DOMMatrix(css.transform) : new DOMMatrix();
+
+    // wrapper = T(left, top) * T(origin) * CSS * T(-origin) * svgUser
+    // WebKit getScreenCTM() ignores the CSS scale/rotate on the canvas, so invert this instead.
+    try {
+        return new DOMMatrix()
+            .translate(left, top)
+            .translate(
+                Number.isFinite(originX) ? originX : width / 2,
+                Number.isFinite(originY) ? originY : height / 2,
+            )
+            .multiply(cssMatrix)
+            .translate(
+                Number.isFinite(originX) ? -originX : -width / 2,
+                Number.isFinite(originY) ? -originY : -height / 2,
+            )
+            .inverse();
+    } catch (_error) {
+        return null;
+    }
+}
+
+function toDOMMatrix(matrix: DOMMatrix | SVGMatrix): DOMMatrix {
+    return new DOMMatrix([matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f]);
+}
+
+/** WebKit SVGPoint.matrixTransform rejects DOMMatrix; native getScreenCTM returns SVGMatrix. */
+export function toSVGMatrix(svg: SVGSVGElement, matrix: DOMMatrix | SVGMatrix): SVGMatrix {
+    const result = svg.createSVGMatrix();
+    result.a = matrix.a;
+    result.b = matrix.b;
+    result.c = matrix.c;
+    result.d = matrix.d;
+    result.e = matrix.e;
+    result.f = matrix.f;
+    return result;
+}
+
+/** Screen CTM that includes the canvas CSS scale/rotate WebKit omits from getScreenCTM(). */
+export function canvasElementScreenCTM(element: SVGGraphicsElement): DOMMatrix | null {
+    const svg = element instanceof SVGSVGElement ? element : element.ownerSVGElement;
+    if (!svg || (svg.id !== 'cvat_canvas_content' && svg.id !== 'cvat_canvas_text_content')) {
+        return null;
+    }
+    const inverse = invertClientToSvg(svg);
+    if (!inverse || !Number.isFinite(inverse.a)) {
+        return null;
+    }
+    const parent = svg.parentElement;
+    if (!parent) {
+        return null;
+    }
+    try {
+        const svgToScreen = new DOMMatrix()
+            .translate(parent.getBoundingClientRect().left, parent.getBoundingClientRect().top)
+            .multiply(inverse.inverse());
+        if (element === svg) {
+            return svgToScreen;
+        }
+        const local = element.getCTM();
+        if (!local) {
+            return svgToScreen;
+        }
+        return svgToScreen.multiply(toDOMMatrix(local));
+    } catch (_error) {
+        return null;
+    }
+}
+
 // Translate point array from the coordinate system of a client
 // to the canvas coordinate system
 export function translateToSVG(svg: SVGSVGElement, points: ArrayLike<number>): number[] {
-    const output = [];
-    const transformationMatrix = (svg.getScreenCTM() as DOMMatrix).inverse();
-    let pt = svg.createSVGPoint();
+    const output: number[] = [];
+    const parent = svg.parentElement;
+    const inverse = invertClientToSvg(svg);
+    if (parent && inverse && Number.isFinite(inverse.a)) {
+        const parentRect = parent.getBoundingClientRect();
+        for (let i = 0; i < points.length; i += 2) {
+            const mapped = new DOMPoint(
+                points[i] - parentRect.left,
+                points[i + 1] - parentRect.top,
+            ).matrixTransform(inverse);
+            output.push(mapped.x, mapped.y);
+        }
+        return output;
+    }
+
+    const ctm = svg.getScreenCTM();
+    if (!ctm) {
+        return Array.from(points);
+    }
+    const transformationMatrix = toDOMMatrix(ctm).inverse();
     for (let i = 0; i < points.length; i += 2) {
-        pt.x = points[i];
-        pt.y = points[i + 1];
-        pt = pt.matrixTransform(transformationMatrix);
-        output.push(pt.x, pt.y);
+        const mapped = new DOMPoint(points[i], points[i + 1]).matrixTransform(transformationMatrix);
+        output.push(mapped.x, mapped.y);
     }
 
     return output;
@@ -411,6 +515,17 @@ export function imageDataToDataURL(
         const dataURL = URL.createObjectURL(blob);
         handleResult(dataURL);
     });
+}
+
+/** Keep the blob URL alive until the SVG image is removed. WebKit re-decodes
+ * `<image href>` when the node is selectized; revoking on first load shows "?". */
+export function loadSvgBlobImage(image: SVG.Image, dataURL: string): void {
+    if (image.parent() === null) {
+        URL.revokeObjectURL(dataURL);
+        return;
+    }
+    image.error(() => URL.revokeObjectURL(dataURL));
+    image.load(dataURL);
 }
 
 export function imageDataToRLE(imageData: Uint8ClampedArray): number[] {

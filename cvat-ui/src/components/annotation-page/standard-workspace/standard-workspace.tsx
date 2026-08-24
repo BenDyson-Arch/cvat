@@ -17,14 +17,29 @@ import IssueAggregatorComponent from 'components/annotation-page/review/issues-a
 import RemoveConfirmComponent from 'components/annotation-page/standard-workspace/remove-confirm';
 import PropagateConfirmComponent from 'components/annotation-page/standard-workspace/propagate-confirm';
 import BrushTools from 'components/annotation-page/canvas/views/canvas2d/brush-tools';
+import { isTouchLayout } from 'utils/pointer';
+import TouchToolDock from 'components/annotation-page/touch-chrome/touch-tool-dock';
+import TouchObjectsDrawer from 'components/annotation-page/touch-chrome/touch-objects-drawer';
 
 export default function StandardWorkspaceComponent(): JSX.Element {
+    const touchLayout = isTouchLayout();
+
     return (
-        <Layout hasSider className='cvat-standard-workspace'>
-            <ControlsSideBarContainer />
+        <Layout
+            hasSider={!touchLayout}
+            className={`cvat-standard-workspace${touchLayout ? ' cvat-standard-workspace-touch' : ''}`}
+        >
+            <ControlsSideBarContainer hotkeysOnly={touchLayout} />
             <CanvasLayout />
+            {touchLayout ? (
+                <>
+                    <TouchToolDock />
+                    <TouchObjectsDrawer objectsList={<ObjectsListContainer />} />
+                </>
+            ) : (
+                <ObjectSideBarComponent objectsList={<ObjectsListContainer />} />
+            )}
             <BrushTools />
-            <ObjectSideBarComponent objectsList={<ObjectsListContainer />} />
             <PropagateConfirmComponent />
             <CanvasContextMenuContainer />
             <CanvasPointContextMenuComponent />

@@ -20,6 +20,7 @@ import { collapseSidebar as collapseSidebarAction } from 'actions/annotation-act
 import AppearanceBlock from 'components/annotation-page/appearance-block';
 import IssuesListComponent from 'components/annotation-page/standard-workspace/objects-side-bar/issues-list';
 import { OBJECTS_SIDEBAR_OPEN_Z_LAYER_EVENT } from 'utils/objects-sidebar';
+import { isTouchLayout } from 'utils/pointer';
 
 interface OwnProps {
     objectsList: JSX.Element;
@@ -67,6 +68,10 @@ function ObjectsSideBar(props: StateToProps & DispatchToProps & OwnProps): JSX.E
         };
 
         window.addEventListener(OBJECTS_SIDEBAR_OPEN_Z_LAYER_EVENT, onOpenZLayer);
+
+        if (isTouchLayout() && window.innerWidth < 1366 && !sidebarCollapsed) {
+            collapseSidebar();
+        }
 
         return (): void => {
             window.removeEventListener(OBJECTS_SIDEBAR_OPEN_Z_LAYER_EVENT, onOpenZLayer);

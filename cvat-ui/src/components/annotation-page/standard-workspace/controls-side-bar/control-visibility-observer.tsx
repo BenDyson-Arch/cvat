@@ -49,7 +49,7 @@ export function ExtraControlsControl(): JSX.Element {
         <CustomPopover
             open={popoverOpen}
             onOpenChange={setPopoverOpen}
-            trigger={initialized ? 'hover' : 'click'} // trigger='hover' allows to close the popover by body click
+            trigger='click'
             placement='right'
             overlayStyle={{ display: initialized ? '' : 'none' }}
             content={<div className={extraControlsContentClassName} ref={containerRef} />}

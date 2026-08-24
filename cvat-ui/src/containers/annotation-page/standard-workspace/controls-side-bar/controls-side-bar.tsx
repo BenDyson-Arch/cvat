@@ -37,6 +37,10 @@ interface DispatchToProps {
     redrawShape(): void;
 }
 
+interface OwnProps {
+    hotkeysOnly?: boolean;
+}
+
 function mapStateToProps(state: CombinedState): StateToProps {
     const {
         annotation: {
@@ -86,4 +90,7 @@ function dispatchToProps(dispatch: any): DispatchToProps {
     };
 }
 
-export default connect(mapStateToProps, dispatchToProps)(ControlsSideBarComponent);
+export default connect<StateToProps, DispatchToProps, OwnProps, CombinedState>(
+    mapStateToProps,
+    dispatchToProps,
+)(ControlsSideBarComponent);

@@ -29,6 +29,9 @@ import {
 import Crosshair from './crosshair';
 import consts from './consts';
 import {
+    isDuplicateMouseEvent, isPrimaryDrawButton, isTouchPointer,
+} from './pointer';
+import {
     DrawData, Geometry, RectDrawingMethod, Configuration, CuboidDrawingMethod,
 } from './canvasModel';
 
@@ -39,6 +42,7 @@ export interface DrawHandler {
     draw(drawData: DrawData, geometry: Geometry): void;
     transform(geometry: Geometry): void;
     cancel(): void;
+    undoLastPoint(): boolean;
 }
 
 interface FinalCoordinates {
@@ -124,6 +128,7 @@ export class DrawHandlerImpl implements DrawHandler {
     private canceled: boolean;
     private pointsGroup: SVG.G | null;
     private shapeSizeElement: ShapeSizeElement | null;
+    private windowDrawListeners: Array<[string, EventListener]> = [];
 
     private getFinalEllipseCoordinates(points: number[], fitIntoFrame: boolean): number[] {
         const { offset } = this.geometry;
@@ -376,6 +381,28 @@ export class DrawHandlerImpl implements DrawHandler {
         this.onDrawDoneDefault.call(this, ...args);
     }
 
+    private bindDrawPointer(
+        mouseEvent: 'mousedown.draw' | 'mousemove.draw',
+        handler: (e: MouseEvent) => void,
+    ): void {
+        const pointerEvent = mouseEvent === 'mousedown.draw' ? 'pointerdown.draw' : 'pointermove.draw';
+        const wrapped = (e: MouseEvent): void => {
+            if (isDuplicateMouseEvent(e)) {
+                return;
+            }
+            if (isTouchPointer(e)) {
+                return;
+            }
+            handler(e);
+        };
+        this.canvas.on(mouseEvent, wrapped);
+        this.canvas.on(pointerEvent, wrapped);
+        if (mouseEvent === 'mousemove.draw') {
+            window.addEventListener('pointermove', wrapped as EventListener);
+            this.windowDrawListeners.push(['pointermove', wrapped as EventListener]);
+        }
+    }
+
     private release(): void {
         if (!this.initialized) {
             // prevents recursive calls
@@ -386,6 +413,12 @@ export class DrawHandlerImpl implements DrawHandler {
         this.initialized = false;
         this.canvas.off('mousedown.draw');
         this.canvas.off('mousemove.draw');
+        this.canvas.off('pointerdown.draw');
+        this.canvas.off('pointermove.draw');
+        for (const [type, listener] of this.windowDrawListeners) {
+            window.removeEventListener(type, listener);
+        }
+        this.windowDrawListeners = [];
 
         // Draw plugin in some cases isn't activated
         // For example when draw from initialState
@@ -484,8 +517,8 @@ export class DrawHandlerImpl implements DrawHandler {
             y: null,
         };
 
-        this.canvas.on('mousedown.draw', (e: MouseEvent): void => {
-            if (e.button === 0 && !e.altKey) {
+        this.bindDrawPointer('mousedown.draw', (e: MouseEvent): void => {
+            if (isPrimaryDrawButton(e) && !e.altKey) {
                 if (initialPoint.x === null || initialPoint.y === null) {
                     const translated = translateToSVG(this.canvas.node as any as SVGSVGElement, [e.clientX, e.clientY]);
                     [initialPoint.x, initialPoint.y] = translated;
@@ -495,7 +528,7 @@ export class DrawHandlerImpl implements DrawHandler {
             }
         });
 
-        this.canvas.on('mousemove.draw', (e: MouseEvent): void => {
+        this.bindDrawPointer('mousemove.draw', (e: MouseEvent): void => {
             if (initialPoint.x !== null && initialPoint.y !== null) {
                 const translated = translateToSVG(this.canvas.node as any as SVGSVGElement, [e.clientX, e.clientY]);
                 const rx = Math.abs(translated[0] - initialPoint.x) / 2;
@@ -625,7 +658,7 @@ export class DrawHandlerImpl implements DrawHandler {
         this.drawInstance.on('undopoint', (): number => size++);
 
         // Add ability to cancel the latest drawn point
-        this.canvas.on('mousedown.draw', (e: MouseEvent): void => {
+        this.bindDrawPointer('mousedown.draw', (e: MouseEvent): void => {
             if (e.button === 2) {
                 e.stopPropagation();
                 e.preventDefault();
@@ -644,7 +677,7 @@ export class DrawHandlerImpl implements DrawHandler {
             y: null,
         };
 
-        this.canvas.on('mousemove.draw', (e: MouseEvent): void => {
+        this.bindDrawPointer('mousemove.draw', (e: MouseEvent): void => {
             // TODO: Use enumeration after typification cvat-core
             const slidingEnabled = e.shiftKey && !e.ctrlKey && !e.altKey && !e.metaKey;
             if (slidingEnabled && ['polygon', 'polyline'].includes(this.drawData.shapeType)) {
@@ -965,7 +998,7 @@ export class DrawHandlerImpl implements DrawHandler {
         const { x: initialX, y: initialY } = this.cursorPosition;
         moveShape(this.drawInstance, initialX, initialY);
 
-        this.canvas.on('mousemove.draw', (): void => {
+        this.bindDrawPointer('mousemove.draw', (): void => {
             const { x, y } = this.cursorPosition; // was computed in another callback
             moveShape(this.drawInstance, x, y);
         });
@@ -1150,7 +1183,7 @@ export class DrawHandlerImpl implements DrawHandler {
             }
         });
 
-        this.canvas.on('mousemove.draw', (): void => {
+        this.bindDrawPointer('mousemove.draw', (): void => {
             const [newXtl, newYtl] = [
                 this.drawInstance.x(), this.drawInstance.y(),
                 this.drawInstance.width(), this.drawInstance.height(),
@@ -1203,7 +1236,7 @@ export class DrawHandlerImpl implements DrawHandler {
 
         moveShape(this.drawInstance, this.pointsGroup, initialX, initialY, this.geometry.scale);
 
-        this.canvas.on('mousemove.draw', (): void => {
+        this.bindDrawPointer('mousemove.draw', (): void => {
             const { x, y } = this.cursorPosition; // was computer in another callback
             moveShape(this.drawInstance, this.pointsGroup, x, y, this.geometry.scale);
         });
@@ -1212,8 +1245,8 @@ export class DrawHandlerImpl implements DrawHandler {
     }
 
     private setupPasteEvents(): void {
-        this.canvas.on('mousedown.draw', (e: MouseEvent): void => {
-            if (e.button === 0 && !e.altKey) {
+        this.bindDrawPointer('mousedown.draw', (e: MouseEvent): void => {
+            if (isPrimaryDrawButton(e) && !e.altKey) {
                 this.drawInstance.fire('done', { originalEvent: e });
             }
         });
@@ -1222,14 +1255,22 @@ export class DrawHandlerImpl implements DrawHandler {
     private setupDrawEvents(): void {
         let initialized = false;
 
-        this.canvas.on('mousedown.draw', (e: MouseEvent): void => {
-            if (e.button === 0 && !e.altKey) {
+        this.bindDrawPointer('mousedown.draw', (e: MouseEvent): void => {
+            if (isPrimaryDrawButton(e) && !e.altKey) {
                 if (!initialized) {
                     this.drawInstance.draw(e, { snapToGrid: 0.1 });
                     initialized = true;
                 } else {
                     this.drawInstance.draw(e);
                 }
+            }
+        });
+
+        // svg.draw.js rubber-bands on window mousemove. Pencil pointer events on iPad
+        // often have no matching mousemove; drive updates from pointermove instead.
+        this.bindDrawPointer('mousemove.draw', (e: MouseEvent): void => {
+            if (initialized && this.drawInstance?.remember('_paintHandler')) {
+                this.drawInstance.draw('update', e);
             }
         });
     }
@@ -1335,6 +1376,7 @@ export class DrawHandlerImpl implements DrawHandler {
         this.crosshair = new Crosshair();
         this.drawInstance = null;
         this.pointsGroup = null;
+        this.windowDrawListeners = [];
         this.getDrawnStates = getDrawnStates;
         this.isCtrlKeyDown = isCtrlKeyDown;
         this.cursorPosition = {
@@ -1343,6 +1385,19 @@ export class DrawHandlerImpl implements DrawHandler {
         };
 
         this.canvas.on('mousemove.crosshair', (e: MouseEvent): void => {
+            if (isDuplicateMouseEvent(e) || isTouchPointer(e)) {
+                return;
+            }
+            const [x, y] = translateToSVG((this.canvas.node as any) as SVGSVGElement, [e.clientX, e.clientY]);
+            this.cursorPosition = { x, y };
+            if (this.crosshair) {
+                this.crosshair.move(x, y);
+            }
+        });
+        this.canvas.on('pointermove.crosshair', (e: MouseEvent): void => {
+            if (isTouchPointer(e)) {
+                return;
+            }
             const [x, y] = translateToSVG((this.canvas.node as any) as SVGSVGElement, [e.clientX, e.clientY]);
             this.cursorPosition = { x, y };
             if (this.crosshair) {
@@ -1468,6 +1523,14 @@ export class DrawHandlerImpl implements DrawHandler {
             this.release();
             this.drawData = drawData;
         }
+    }
+
+    public undoLastPoint(): boolean {
+        if (this.drawInstance && this.drawInstance.remember('_paintHandler')) {
+            this.drawInstance.draw('undo');
+            return true;
+        }
+        return false;
     }
 
     public cancel(): void {

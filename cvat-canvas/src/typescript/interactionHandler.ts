@@ -9,7 +9,7 @@ import consts from './consts';
 import Crosshair from './crosshair';
 import {
     stringifyPoints, translateToCanvas, RLEToImageData,
-    imageDataToDataURL, translateFromCanvas, translateToSVG,
+    imageDataToDataURL, loadSvgBlobImage, translateFromCanvas, translateToSVG,
     clamp,
 } from './shared';
 import {
@@ -337,15 +337,7 @@ export class InteractionHandlerImpl implements InteractionHandler {
                     right - left + 1,
                     bottom - top + 1,
                     (dataURL: string) => {
-                        const destroy = (): void => URL.revokeObjectURL(dataURL);
-                        if (image.parent() !== null) {
-                            // still in DOM
-                            image.loaded(destroy);
-                            image.error(destroy);
-                            image.load(dataURL);
-                        } else {
-                            destroy();
-                        }
+                        loadSvgBlobImage(image, dataURL);
                     },
                 );
             }

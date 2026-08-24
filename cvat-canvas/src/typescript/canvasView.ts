@@ -32,11 +32,14 @@ import {
     pointsToNumberArray, parsePoints, displayShapeSize, scalarProduct,
     vectorLength, ShapeSizeElement, DrawnState, rotate2DPoints,
     readPointsFromShape, setupSkeletonEdges, makeSVGFromTemplate,
-    imageDataToDataURL, RLEToImageData, stringifyPoints, imageDataToRLE,
+    imageDataToDataURL, loadSvgBlobImage, RLEToImageData, stringifyPoints, imageDataToRLE,
     composeShapeDimensions, getRoundedRotation,
     clamp, validateUnionResult, processPolygonUnionResult,
     applySnapToShapePoint, isPolygonSelfIntersecting,
 } from './shared';
+import {
+    isDuplicateMouseEvent, isPenPointer, PointerGestureSession,
+} from './pointer';
 import {
     CanvasModel, Geometry, UpdateReasons, FrameZoom, ActiveElement,
     DrawData, MergeData, SplitData, Mode, Size, Configuration,
@@ -50,6 +53,7 @@ export interface CanvasView {
     translateFromSVG(points: number[]): number[];
     undo(): boolean;
     redo(): boolean;
+    undoDrawPoint(): boolean;
 }
 
 export class CanvasViewImpl implements CanvasView, Listener {
@@ -95,6 +99,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
     private resizableShape: SVG.Shape | null;
     private skeletonResizerRefreshRequest: number | null;
     private ctrlPressed: boolean;
+    private pointerGestures: PointerGestureSession | null;
     private innerObjectsFlags: {
         drawHidden: Record<number, boolean>;
         editHidden: Record<number, boolean>;
@@ -1927,10 +1932,64 @@ export class CanvasViewImpl implements CanvasView, Listener {
     };
 
     private onMouseUp = (event: MouseEvent): void => {
+        if (isDuplicateMouseEvent(event)) {
+            return;
+        }
         if (event.button === 0 || event.button === 1) {
             this.controller.disableDrag();
         }
     };
+
+    private onPointerDown = (event: PointerEvent): void => {
+        this.pointerGestures?.onPointerDown(event);
+        try {
+            if (event.pointerType === 'touch' && !isPenPointer(event)) {
+                this.canvas.setPointerCapture(event.pointerId);
+            } else if (isPenPointer(event)) {
+                const target = event.target as Node | null;
+                if (target && (this.content === target || this.content.contains(target))) {
+                    this.content.setPointerCapture(event.pointerId);
+                }
+            }
+        } catch (_error) {
+            // setPointerCapture is not available on some SVG hosts
+        }
+    };
+
+    private onPointerMove = (event: PointerEvent): void => {
+        this.pointerGestures?.onPointerMove(event);
+    };
+
+    private onPointerUp = (event: PointerEvent): void => {
+        this.pointerGestures?.onPointerUp(event);
+        if (event.pointerType === 'touch') {
+            this.controller.disableDrag();
+        }
+    };
+
+    private dispatchCursorMoved(clientX: number, clientY: number): void {
+        if (this.mode !== Mode.IDLE || this.isImageLoading) {
+            return;
+        }
+        const { offset } = this.controller.geometry;
+        const [x, y] = translateToSVG(this.content, [clientX, clientY]);
+        this.canvas.dispatchEvent(new CustomEvent('canvas.moved', {
+            bubbles: false,
+            cancelable: true,
+            detail: {
+                x: x - offset,
+                y: y - offset,
+                states: this.controller.objects,
+            },
+        }));
+    }
+
+    private dispatchZoomEvent(): void {
+        this.canvas.dispatchEvent(new CustomEvent('canvas.zoom', {
+            bubbles: false,
+            cancelable: true,
+        }));
+    }
 
     public constructor(model: CanvasModel & Master, controller: CanvasController) {
         this.controller = controller;
@@ -1951,6 +2010,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
         this.mode = Mode.IDLE;
         this.snapToAngleResize = consts.SNAP_TO_ANGLE_RESIZE_DEFAULT;
         this.ctrlPressed = false;
+        this.pointerGestures = null;
         this.innerObjectsFlags = {
             drawHidden: {},
             editHidden: {},
@@ -2038,6 +2098,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
 
         // Setup wrappers
         this.canvas.setAttribute('id', 'cvat_canvas_wrapper');
+        this.canvas.style.touchAction = 'none';
 
         // Unite created HTML elements together
         this.grid.appendChild(gridDefs);
@@ -2129,6 +2190,9 @@ export class CanvasViewImpl implements CanvasView, Listener {
         });
 
         this.canvas.addEventListener('mousedown', (event): void => {
+            if (isDuplicateMouseEvent(event)) {
+                return;
+            }
             if ([0, 1].includes(event.button)) {
                 if (
                     [Mode.IDLE, Mode.DRAG_CANVAS, Mode.MERGE, Mode.SPLIT]
@@ -2139,11 +2203,48 @@ export class CanvasViewImpl implements CanvasView, Listener {
             }
         });
 
+        this.pointerGestures = new PointerGestureSession({
+            panStart: (clientX, clientY) => {
+                this.controller.enableDrag(clientX, clientY);
+            },
+            panMove: (clientX, clientY) => {
+                this.controller.drag(clientX, clientY);
+            },
+            panEnd: () => {
+                this.controller.disableDrag();
+            },
+            pinch: (clientX, clientY, deltaY) => {
+                const { offset } = this.controller.geometry;
+                const point = translateToSVG(this.content, [clientX, clientY]);
+                this.controller.zoom(point[0] - offset, point[1] - offset, clamp(deltaY, -8, 8));
+                this.dispatchZoomEvent();
+            },
+            tap: (clientX, clientY) => {
+                this.dispatchCursorMoved(clientX, clientY);
+            },
+            longPress: (clientX, clientY) => {
+                this.canvas.dispatchEvent(new MouseEvent('contextmenu', {
+                    bubbles: true,
+                    cancelable: true,
+                    clientX,
+                    clientY,
+                    view: window,
+                }));
+            },
+        });
+
+        this.canvas.addEventListener('pointerdown', this.onPointerDown, { passive: false });
+        this.canvas.addEventListener('pointermove', this.onPointerMove, { passive: false });
+        this.canvas.addEventListener('pointerup', this.onPointerUp);
+        this.canvas.addEventListener('pointercancel', this.onPointerUp);
+        this.canvas.addEventListener('lostpointercapture', this.onPointerUp);
+
         window.document.addEventListener('mouseup', this.onMouseUp);
+        window.document.addEventListener('pointerup', this.onPointerUp);
         window.document.addEventListener('keydown', this.onKeyDown);
         window.document.addEventListener('keyup', this.onKeyUp);
 
-        for (const eventName of ['wheel', 'mousedown', 'dblclick', 'contextmenu']) {
+        for (const eventName of ['wheel', 'mousedown', 'dblclick', 'contextmenu', 'pointerdown', 'pointermove']) {
             this.attachmentBoard.addEventListener(eventName, (event) => {
                 event.stopPropagation();
             });
@@ -2177,25 +2278,17 @@ export class CanvasViewImpl implements CanvasView, Listener {
         });
 
         this.canvas.addEventListener('mousemove', (e): void => {
+            if (isDuplicateMouseEvent(e)) {
+                this.controller.drag(e.clientX, e.clientY);
+                return;
+            }
             this.controller.drag(e.clientX, e.clientY);
 
             if (this.mode !== Mode.IDLE) return;
             if (e.ctrlKey || e.altKey) return;
 
             if (!this.isImageLoading) {
-                const { offset } = this.controller.geometry;
-                const [x, y] = translateToSVG(this.content, [e.clientX, e.clientY]);
-                const event: CustomEvent = new CustomEvent('canvas.moved', {
-                    bubbles: false,
-                    cancelable: true,
-                    detail: {
-                        x: x - offset,
-                        y: y - offset,
-                        states: this.controller.objects,
-                    },
-                });
-
-                this.canvas.dispatchEvent(event);
+                this.dispatchCursorMoved(e.clientX, e.clientY);
             }
         });
 
@@ -2640,6 +2733,14 @@ export class CanvasViewImpl implements CanvasView, Listener {
             window.document.removeEventListener('keydown', this.onKeyDown);
             window.document.removeEventListener('keyup', this.onKeyUp);
             window.document.removeEventListener('mouseup', this.onMouseUp);
+            window.document.removeEventListener('pointerup', this.onPointerUp);
+            this.canvas.removeEventListener('pointerdown', this.onPointerDown);
+            this.canvas.removeEventListener('pointermove', this.onPointerMove);
+            this.canvas.removeEventListener('pointerup', this.onPointerUp);
+            this.canvas.removeEventListener('pointercancel', this.onPointerUp);
+            this.canvas.removeEventListener('lostpointercapture', this.onPointerUp);
+            this.pointerGestures?.destroy();
+            this.pointerGestures = null;
             this.interactionHandler.destroy();
         }
 
@@ -2658,6 +2759,10 @@ export class CanvasViewImpl implements CanvasView, Listener {
 
     public redo(): boolean {
         return this.masksHandler.redo();
+    }
+
+    public undoDrawPoint(): boolean {
+        return this.drawHandler.undoLastPoint();
     }
 
     public setupConflictRegions(state: any): number[] {
@@ -3834,14 +3939,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
             right - left + 1,
             bottom - top + 1,
             (dataURL: string): void => {
-                const destroy = (): void => URL.revokeObjectURL(dataURL);
-                if (image.parent() !== null) {
-                    image.loaded(destroy);
-                    image.error(destroy);
-                    image.load(dataURL);
-                } else {
-                    destroy();
-                }
+                loadSvgBlobImage(image, dataURL);
             },
         );
 

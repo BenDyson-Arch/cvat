@@ -1,0 +1,369 @@
+// Copyright (C) CVAT.ai Corporation
+//
+// SPDX-License-Identifier: MIT
+
+@import 'base';
+
+html.cvat-touch-layout {
+    .cvat-annotation-page-touch {
+        .ant-layout-header.cvat-touch-annotation-header {
+            height: 44px;
+            padding: 0 6px 0 calc(6px + env(safe-area-inset-left));
+            padding-right: calc(6px + env(safe-area-inset-right));
+            display: flex;
+            align-items: center;
+            background-color: $background-color-2;
+            line-height: 44px;
+            overflow: hidden;
+            touch-action: manipulation;
+        }
+    }
+
+    .cvat-standard-workspace-touch {
+        position: relative;
+        min-width: 0;
+
+        > .ant-layout-content {
+            flex: auto;
+            width: 100%;
+            min-width: 0;
+            min-height: 0;
+        }
+
+        .cvat-canvas-controls-sidebar,
+        > .cvat-objects-sidebar {
+            display: none;
+        }
+    }
+
+    .cvat-canvas-draw-actions {
+        display: none;
+    }
+
+    .cvat-canvas-image-setups-trigger {
+        left: auto;
+        right: 12px;
+        transform: none;
+        bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    }
+
+    .cvat-canvas-layer-stack-trigger {
+        bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+.cvat-touch-annotation-header-inner {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+    gap: 2px;
+    touch-action: manipulation;
+
+    &.cvat-touch-chrome-receding {
+        opacity: 1;
+    }
+
+    .cvat-annotation-header-button {
+        width: 40px;
+        min-width: 40px;
+        height: 40px;
+        margin: 0;
+        padding: 0;
+
+        > span:not([role='img']) {
+            display: none;
+        }
+    }
+
+    .cvat-touch-header-cluster {
+        display: flex;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    .cvat-touch-header-player {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 1;
+        min-width: 0;
+        gap: 2px;
+    }
+
+    .cvat-touch-frame-button {
+        min-width: 56px;
+        height: 40px;
+        padding: 0 8px;
+        font-variant-numeric: tabular-nums;
+    }
+}
+
+.cvat-touch-frame-popover {
+    min-width: 280px;
+    max-width: 420px;
+    padding: $grid-unit-size;
+
+    .ant-slider {
+        margin: $grid-unit-size $grid-unit-size * 2;
+    }
+
+    .cvat-touch-frame-filename {
+        max-width: 360px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 12px;
+        padding: 0 $grid-unit-size;
+    }
+}
+
+.cvat-touch-tool-dock {
+    position: absolute;
+    left: 50%;
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    transform: translateX(-50%);
+    z-index: 120;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    padding: 6px;
+    max-width: calc(100vw - 24px);
+    border-radius: 22px;
+    background: rgba(255, 255, 255, 92%);
+    box-shadow: $box-shadow-base;
+    touch-action: manipulation;
+    pointer-events: all;
+
+    &.cvat-touch-tool-dock-drawing {
+        opacity: 1;
+    }
+
+    .cvat-touch-dock-extras {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+        max-width: 100%;
+    }
+
+    .cvat-touch-dock-nav {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .cvat-brush-tools-toolbox,
+    .cvat-brush-tools-toolbox-touch {
+        position: static;
+        margin: 0;
+        padding: 0;
+        box-shadow: none;
+        background: transparent;
+        max-width: 100%;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+
+        .cvat-brush-tools-finish,
+        .cvat-brush-tools-draggable-area {
+            display: none;
+        }
+
+        > hr {
+            height: 28px;
+        }
+
+        > button {
+            min-width: 44px;
+            min-height: 44px;
+        }
+    }
+
+    .cvat-touch-dock-session {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding-right: 4px;
+        margin-right: 2px;
+        border-right: 1px solid $border-color-1;
+    }
+
+    .cvat-touch-dock-button {
+        min-width: 44px;
+        min-height: 44px;
+        width: 44px;
+        height: 44px;
+        padding: 0;
+        border: none;
+        border-radius: 16px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: $text-color;
+        background: transparent;
+
+        &.cvat-touch-dock-button-active {
+            background: $header-color;
+        }
+    }
+
+    .cvat-touch-dock-done.ant-btn-primary {
+        color: #fff;
+    }
+
+    .cvat-touch-dock-draw {
+        display: flex;
+        align-items: center;
+        border-radius: 16px;
+
+        &.cvat-touch-dock-button-active {
+            background: $header-color;
+        }
+
+        .cvat-touch-dock-draw-main {
+            min-width: 44px;
+            min-height: 44px;
+        }
+
+        .cvat-touch-dock-draw-chevron {
+            min-width: 28px;
+            width: 28px;
+            min-height: 44px;
+        }
+    }
+}
+
+.cvat-touch-draw-sheet,
+.cvat-touch-tools-sheet {
+    .ant-drawer-body {
+        padding: $grid-unit-size * 2;
+        padding-bottom: calc(#{$grid-unit-size * 2} + env(safe-area-inset-bottom, 0px));
+    }
+}
+
+.cvat-touch-shape-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(64px, 1fr));
+    gap: $grid-unit-size;
+    margin-bottom: $grid-unit-size * 2;
+
+    .cvat-touch-shape-cell {
+        min-height: 56px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        border: 1px solid $border-color-1;
+        border-radius: $border-radius-base;
+        background: white;
+        padding: 6px;
+        touch-action: manipulation;
+
+        &.cvat-touch-shape-cell-active {
+            border-color: $border-color-hover;
+            background: $header-color;
+        }
+
+        span {
+            font-size: 11px;
+            line-height: 1.2;
+        }
+    }
+}
+
+.cvat-touch-tools-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: $grid-unit-size * 1.5;
+    justify-items: center;
+    align-items: start;
+    margin-bottom: $grid-unit-size * 2;
+
+    > * {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+        min-height: 56px;
+        min-width: 56px;
+    }
+
+    .cvat-touch-image-setups,
+    .anticon,
+    .cvat-cursor-control,
+    .cvat-move-control,
+    .cvat-fit-control,
+    .cvat-resize-control,
+    .cvat-rotate-canvas-control,
+    .cvat-draw-rectangle-control,
+    .cvat-draw-polygon-control,
+    .cvat-draw-polyline-control,
+    .cvat-draw-points-control,
+    .cvat-draw-ellipse-control,
+    .cvat-draw-cuboid-control,
+    .cvat-draw-mask-control,
+    .cvat-draw-skeleton-control,
+    .cvat-setup-tag-control,
+    .cvat-merge-control,
+    .cvat-group-control,
+    .cvat-split-track-control,
+    .cvat-join-control,
+    .cvat-slice-control,
+    .cvat-snap-tools-control,
+    .cvat-opencv-control,
+    .cvat-tools-control {
+        transform: none;
+        min-width: 44px;
+        min-height: 44px;
+        font-size: 22px;
+    }
+}
+
+.cvat-touch-objects-drawer {
+    .ant-drawer-body {
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        overflow: hidden;
+    }
+
+    .cvat-objects-sidebar {
+        position: relative;
+        width: 100% !important;
+        max-width: none;
+        height: 100%;
+        box-shadow: none;
+        border: none;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .cvat-touch-objects-drawer-body {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-height: 0;
+
+        > .cvat-objects-sidebar-tabs {
+            flex-grow: 1;
+            min-height: 0;
+            overflow: hidden;
+            padding-top: $grid-unit-size;
+
+            .ant-tabs-content-holder,
+            .ant-tabs-content,
+            .ant-tabs-tabpane {
+                height: 100%;
+            }
+        }
+    }
+
+    .cvat-objects-sidebar-sider {
+        display: none;
+    }
+}

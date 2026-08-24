@@ -11,6 +11,11 @@ export function finishDrawAvailable(activeControl: ActiveControl): boolean {
         ActiveControl.DRAW_POLYGON,
         ActiveControl.DRAW_POLYLINE,
         ActiveControl.DRAW_POINTS,
+        ActiveControl.DRAW_RECTANGLE,
+        ActiveControl.DRAW_ELLIPSE,
+        ActiveControl.DRAW_MASK,
+        ActiveControl.DRAW_CUBOID,
+        ActiveControl.DRAW_SKELETON,
         ActiveControl.AI_TOOLS,
         ActiveControl.OPENCV_TOOLS,
     ].includes(activeControl);

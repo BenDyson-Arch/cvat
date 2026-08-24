@@ -10,6 +10,7 @@ import notification from 'antd/lib/notification';
 import Button from 'antd/lib/button';
 
 import './styles.scss';
+import './touch-chrome/styles.scss';
 import { Job } from 'cvat-core-wrapper';
 import AttributeAnnotationWorkspace from 'components/annotation-page/attribute-annotation-workspace/attribute-annotation-workspace';
 import SingleShapeWorkspace from 'components/annotation-page/single-shape-workspace/single-shape-workspace';
@@ -27,7 +28,10 @@ import { usePrevious } from 'utils/hooks';
 import EventRecorder from 'utils/event-recorder';
 import { readLatestFrame } from 'utils/remember-latest-frame';
 import { EventScope } from 'cvat-core/src/enums';
+import { isTouchLayout, lockAnnotationViewport } from 'utils/pointer';
 import SearchFramesModal from './top-bar/search-modal';
+import { TouchChromeProvider } from './touch-chrome/touch-chrome-context';
+import TouchAnnotationHeader from './touch-chrome/touch-annotation-header';
 
 interface Props {
     job: Job | null | undefined;
@@ -51,18 +55,24 @@ export default function AnnotationPageComponent(props: Props): JSX.Element {
 
     useEffect(() => {
         saveLogs();
+        const unlockViewport = lockAnnotationViewport();
         const root = window.document.getElementById('root');
         if (root) {
-            root.style.minHeight = '720px';
+            root.style.minHeight = isTouchLayout() ? '100dvh' : '720px';
+            if (isTouchLayout()) {
+                root.style.minWidth = '0';
+            }
         }
 
         return () => {
             saveLogs();
             closeJob();
             EventRecorder.logger = null;
+            unlockViewport();
 
             if (root) {
                 root.style.minHeight = '';
+                root.style.minWidth = '';
             }
         };
     }, []);
@@ -148,11 +158,18 @@ export default function AnnotationPageComponent(props: Props): JSX.Element {
         return <AudioAnnotationPage />;
     }
 
-    return (
-        <Layout className='cvat-annotation-page'>
-            <Layout.Header className='cvat-annotation-header'>
-                <AnnotationTopBarContainer />
-            </Layout.Header>
+    const touchLayout = isTouchLayout();
+    const page = (
+        <Layout className={`cvat-annotation-page${touchLayout ? ' cvat-annotation-page-touch' : ''}`}>
+            {touchLayout ? (
+                <Layout.Header className='cvat-touch-annotation-header'>
+                    <TouchAnnotationHeader />
+                </Layout.Header>
+            ) : (
+                <Layout.Header className='cvat-annotation-header'>
+                    <AnnotationTopBarContainer />
+                </Layout.Header>
+            )}
             <Layout.Content className='cvat-annotation-layout-content'>
                 {workspace === Workspace.STANDARD3D && <StandardWorkspace3DComponent />}
                 {workspace === Workspace.STANDARD && <StandardWorkspaceComponent />}
@@ -166,4 +183,6 @@ export default function AnnotationPageComponent(props: Props): JSX.Element {
             <SearchFramesModal />
         </Layout>
     );
+
+    return touchLayout ? <TouchChromeProvider>{page}</TouchChromeProvider> : page;
 }

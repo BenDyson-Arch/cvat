@@ -37,9 +37,17 @@ export function stopNotifications(saveInStorage: boolean): void {
 }
 
 export default function showPlatformNotification(): boolean {
-    // Blick is engine of Chrome, Microsoft Edge >= v79
-    // Gecko is engine of Firefox, supported but works worse than in Chrome (let's show the message)
-    // WebKit is engine of Apple Safary, not supported
+    // Blink is the engine of Chrome, Microsoft Edge >= v79
+    // Gecko is the engine of Firefox, supported but works worse than in Chrome (let's show the message)
+    // WebKit is the engine of Safari. Desktop Safari is still unsupported;
+    // iPad / coarse-pointer WebKit is an intended annotation target.
+    const isIPad = /iPad/.test(window.navigator.userAgent) ||
+        (/Macintosh/.test(window.navigator.userAgent) && window.navigator.maxTouchPoints > 1);
+    const coarsePointer = typeof window.matchMedia === 'function' &&
+        window.matchMedia('(any-pointer: coarse)').matches;
+    if (isIPad || coarsePointer) {
+        return false;
+    }
     const unsupportedPlatform = !['Blink'].includes(engine);
     return !platformNotificationShown && unsupportedPlatform;
 }

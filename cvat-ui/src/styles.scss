@@ -147,6 +147,39 @@ html, body {
     min-width: 1024px;
 }
 
+html.cvat-annotation-session,
+html.cvat-annotation-session body {
+    height: 100%;
+    height: 100dvh;
+    overscroll-behavior: none;
+    -webkit-overflow-scrolling: auto;
+    touch-action: none;
+}
+
+html.cvat-annotation-session #root {
+    min-width: 0;
+    min-height: 0;
+    height: 100%;
+    height: 100dvh;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+html.cvat-touch-layout .cvat-annotation-page.ant-layout,
+html.cvat-touch-layout .cvat-standard-workspace.ant-layout {
+    min-width: 0;
+}
+
+html.cvat-touch-layout .ant-layout-header.cvat-annotation-header {
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+
+    > div:first-child {
+        flex-wrap: nowrap;
+        min-width: max-content;
+    }
+}
+
 #layout-grid {
     overflow: hidden;
     position: fixed;

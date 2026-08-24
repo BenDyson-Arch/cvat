@@ -21,6 +21,14 @@
 .cvat-annotation-page.ant-layout {
     height: 100%;
     overflow: hidden;
+    overscroll-behavior: none;
+}
+
+.cvat-canvas-container {
+    touch-action: none;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
 .cvat-annotation-layout-content {
@@ -75,6 +83,11 @@
 
         &:active > span[role='img'] {
             transform: scale(1.05);
+        }
+
+        @media (pointer: coarse), (any-pointer: coarse) {
+            min-width: 44px;
+            min-height: 44px;
         }
 
         &.filters-armed {
@@ -288,6 +301,14 @@
 
 .cvat-workspace-selector {
     width: 150px;
+}
+
+html.cvat-touch-layout .cvat-workspace-selector {
+    width: 120px;
+}
+
+html.cvat-touch-layout .cvat-annotation-layout-content {
+    min-width: 0;
 }
 
 .cvat-job-info-modal-window {

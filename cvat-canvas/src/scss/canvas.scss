@@ -354,6 +354,11 @@ g.cvat_canvas_shape_occluded {
     background-color: inherit;
     overflow: hidden;
     position: relative;
+    touch-action: none;
+    overscroll-behavior: none;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
 }
 
 .cvat-canvas-highlight-enabled {
@@ -440,13 +445,22 @@ g.cvat_canvas_shape_occluded {
     outline: 10px solid black;
     width: 100%;
     height: 100%;
+    pointer-events: all;
+    touch-action: none;
 }
 
 .cvat_masks_canvas_wrapper {
     @extend .cvat_canvas_pixelized;
 
+    position: absolute;
     z-index: 3;
     display: none;
+    touch-action: none;
+    background: transparent;
+
+    canvas {
+        background: transparent;
+    }
 }
 
 #cvat_canvas_attachment_board {

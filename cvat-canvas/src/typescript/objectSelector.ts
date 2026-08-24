@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MIT
 
 import * as SVG from 'svg.js';
-import { RLEToImageData, imageDataToDataURL, translateToSVG } from './shared';
+import { RLEToImageData, imageDataToDataURL, loadSvgBlobImage, translateToSVG } from './shared';
 import { Geometry } from './canvasModel';
 import consts from './consts';
 
@@ -203,15 +203,7 @@ export class ObjectSelectorImpl implements ObjectSelector {
                                 right - left + 1,
                                 bottom - top + 1,
                                 (dataURL: string) => {
-                                    const destroy = (): void => URL.revokeObjectURL(dataURL);
-                                    if (image.parent() !== null) {
-                                        // still in DOM
-                                        image.loaded(destroy);
-                                        image.error(destroy);
-                                        image.load(dataURL);
-                                    } else {
-                                        destroy();
-                                    }
+                                    loadSvgBlobImage(image, dataURL);
                                 },
                             );
 

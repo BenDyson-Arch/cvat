@@ -11,21 +11,98 @@ import 'svg.draw.js';
 
 import consts from './consts';
 import { Equation, CuboidModel, Orientation, Edge } from './cuboid';
-import { Point, parsePoints, clamp } from './shared';
+import { Point, parsePoints, clamp, canvasElementScreenCTM, translateToSVG, toSVGMatrix } from './shared';
+import { isTouchPointer } from './pointer';
+
+if (typeof SVGGraphicsElement !== 'undefined') {
+    const nativeGetScreenCTM = SVGGraphicsElement.prototype.getScreenCTM;
+    SVGGraphicsElement.prototype.getScreenCTM = function patchedGetScreenCTM(): DOMMatrix | null {
+        const patched = canvasElementScreenCTM(this);
+        if (patched) {
+            const svg = this instanceof SVGSVGElement ? this : this.ownerSVGElement;
+            if (svg) {
+                return toSVGMatrix(svg, patched) as unknown as DOMMatrix;
+            }
+            return patched;
+        }
+        return nativeGetScreenCTM.call(this);
+    };
+}
+
+function patchPaintHandler(handler: any): void {
+    if (!handler || handler.__cvatTransformPatched) {
+        return;
+    }
+    handler.__cvatTransformPatched = true;
+
+    handler.transformPoint = function (x: number, y: number) {
+        const node = this.el.node as SVGGraphicsElement;
+        const svg = (node instanceof SVGSVGElement ? node : node.ownerSVGElement) as SVGSVGElement | null;
+        if (svg) {
+            const mapped = translateToSVG(svg, [x, y]);
+            this.p.x = mapped[0];
+            this.p.y = mapped[1];
+            return this.p;
+        }
+        const offsetX = this.offset ? this.offset.x : window.pageXOffset;
+        const offsetY = this.offset ? this.offset.y : window.pageYOffset;
+        this.p.x = x - (offsetX - window.pageXOffset);
+        this.p.y = y - (offsetY - window.pageYOffset);
+        return this.p.matrixTransform(this.m);
+    };
+
+    const originalStart = handler.start.bind(handler);
+    const originalStop = handler.stop.bind(handler);
+
+    handler.start = function (event: Event) {
+        originalStart(event);
+        if (!handler.__cvatPointerMove) {
+            handler.__cvatPointerMove = (e: PointerEvent): void => {
+                if (isTouchPointer(e)) {
+                    return;
+                }
+                handler.update(e);
+            };
+            window.addEventListener('pointermove', handler.__cvatPointerMove);
+        }
+    };
+
+    handler.stop = function (event?: Event) {
+        if (handler.__cvatPointerMove) {
+            window.removeEventListener('pointermove', handler.__cvatPointerMove);
+            handler.__cvatPointerMove = null;
+        }
+        originalStop(event);
+    };
+}
 
 // Update constructor
 const originalDraw = SVG.Element.prototype.draw;
 SVG.Element.prototype.draw = function constructor(...args: any): any {
     let handler = this.remember('_paintHandler');
     if (!handler) {
-        originalDraw.call(this, ...args);
-        handler = this.remember('_paintHandler');
+        const first = args[0];
+        const rest = args.slice(1);
+        if (typeof Event !== 'undefined' && first instanceof Event) {
+            originalDraw.call(this, rest[0] || {});
+            handler = this.remember('_paintHandler');
+            if (handler && handler.parent) {
+                handler.parent.off('click.draw');
+            }
+            patchPaintHandler(handler);
+            originalDraw.call(this, first, ...rest);
+        } else {
+            originalDraw.call(this, ...args);
+            handler = this.remember('_paintHandler');
+            patchPaintHandler(handler);
+        }
         // There is use case (drawing a single point when handler is created and destructed immediately in one stack)
         // So, we need to check if handler still exists
         if (handler && !handler.set) {
             handler.set = new SVG.Set();
         }
     } else {
+        patchPaintHandler(handler);
         originalDraw.call(this, ...args);
     }
 

@@ -31,6 +31,8 @@ import { shallowEqual } from 'utils/redux';
 import GlobalHotKeys from 'utils/mousetrap-react';
 import { subKeyMap } from 'utils/component-subkeymap';
 import { registerComponentShortcuts } from 'actions/shortcuts-actions';
+import { isTouchLayout } from 'utils/pointer';
+import { TOUCH_DOCK_EXTRAS_ID } from 'components/annotation-page/touch-chrome/touch-tool-dock';
 import useDraggable from './draggable-hoc';
 
 const DraggableArea = (
@@ -123,6 +125,7 @@ function BrushTools(): React.ReactPortal | null {
     };
 
     const [removeUnderlyingPixels, setRemoveUnderlyingPixels] = useState(false);
+    const [touchHost, setTouchHost] = useState<HTMLElement | null>(null);
     const dragBar = useDraggable(
         (): number[] => {
             const [element] = window.document.getElementsByClassName('cvat-brush-tools-toolbox');
@@ -211,6 +214,12 @@ function BrushTools(): React.ReactPortal | null {
     }, []);
 
     useEffect(() => {
+        if (isTouchLayout()) {
+            setTouchHost(window.document.getElementById(TOUCH_DOCK_EXTRAS_ID));
+        }
+    }, [visible]);
+
+    useEffect(() => {
         const resetCurrentTool = (): void => {
             if (['eraser', 'polygon-minus'].includes(currentTool)) {
                 setCurrentTool('brush');
@@ -269,8 +278,14 @@ function BrushTools(): React.ReactPortal | null {
         return null;
     }
 
+    const touchLayout = isTouchLayout();
+    const portalTarget = touchHost || window.document.body;
+
     return ReactDOM.createPortal((
-        <div className='cvat-brush-tools-toolbox' style={{ top, left, display: visible ? '' : 'none' }}>
+        <div
+            className={`cvat-brush-tools-toolbox${touchLayout ? ' cvat-brush-tools-toolbox-touch' : ''}`}
+            style={touchLayout ? { display: visible ? '' : 'none' } : { top, left, display: visible ? '' : 'none' }}
+        >
             <GlobalHotKeys
                 keyMap={subKeyMap(componentShortcuts, keyMap)}
                 handlers={handlers}
@@ -398,10 +413,10 @@ function BrushTools(): React.ReactPortal | null {
                     }}
                 />
             )}
-            { dragBar }
+            { touchLayout ? null : dragBar }
         </div>
 
-    ), window.document.body);
+    ), portalTarget);
 }
 
 export default React.memo(BrushTools);

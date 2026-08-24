@@ -12,6 +12,8 @@
   "browserslist": [
     "Chrome >= 99",
     "Firefox >= 110",
+    "Safari >= 16",
+    "iOS >= 16",
     "not IE 11",
     "> 2%"
   ],

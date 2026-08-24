@@ -55,6 +55,7 @@ interface Canvas {
     configure(configuration: Configuration): void;
     isAbleToChangeFrame(): boolean;
     destroy(): void;
+    undoDrawPoint(): boolean;
 
     readonly geometry: Geometry;
 }
@@ -180,6 +181,10 @@ class CanvasImpl implements Canvas {
 
     public redo(): boolean {
         return this.view.redo();
+    }
+
+    public undoDrawPoint(): boolean {
+        return this.view.undoDrawPoint();
     }
 
     public cancel(): void {
