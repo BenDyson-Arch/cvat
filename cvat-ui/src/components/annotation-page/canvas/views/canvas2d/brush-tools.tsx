@@ -307,29 +307,6 @@ function BrushTools(): React.ReactPortal | null {
                     }}
                 />
             </CVATTooltip>
-            {!editableState && (
-                <CVATTooltip title={`Continue ${normalizedKeyMap.SWITCH_REDRAW_MODE_STANDARD_CONTROLS}`}>
-                    <Button
-                        type='text'
-                        disabled={!!editableState}
-                        className='cvat-brush-tools-continue'
-                        icon={<Icon component={PlusIcon} />}
-                        onClick={() => {
-                            if (canvasInstance instanceof Canvas && defaultLabelID) {
-                                canvasInstance.draw({ enabled: false, continue: true });
-
-                                dispatch(
-                                    rememberObject({
-                                        activeObjectType: ObjectType.SHAPE,
-                                        activeShapeType: ShapeType.MASK,
-                                        activeLabelID: defaultLabelID,
-                                    }),
-                                );
-                            }
-                        }}
-                    />
-                </CVATTooltip>
-            )}
             <hr />
             <CVATTooltip title={`Brush tool ${normalizedKeyMap.ACTIVATE_BRUSH_TOOL_STANDARD_CONTROLS}`}>
                 <Button
@@ -404,7 +381,7 @@ function BrushTools(): React.ReactPortal | null {
                     />
                 </CVATTooltip>
             ) : null}
-            { ['brush', 'eraser'].includes(currentTool) ? (
+            { ['brush', 'eraser'].includes(currentTool) && !touchLayout ? (
                 <Select value={brushForm} onChange={(value: 'circle' | 'square') => setBrushForm(value)}>
                     <Select.Option value='circle'>Circle</Select.Option>
                     <Select.Option value='square'>Square</Select.Option>
@@ -416,14 +393,16 @@ function BrushTools(): React.ReactPortal | null {
                 icon={<VerticalAlignBottomOutlined />}
                 onClick={() => setRemoveUnderlyingPixels(!removeUnderlyingPixels)}
             />
-            <CVATTooltip title={`Hide mask ${normalizedKeyMap.SWITCH_HIDDEN}`}>
-                <Button
-                    type='text'
-                    className={['cvat-brush-tools-hide', ...(activeObjectHidden ? ['cvat-brush-tools-active-tool'] : [])].join(' ')}
-                    icon={activeObjectHidden ? <EyeInvisibleFilled /> : <EyeOutlined />}
-                    onClick={() => hideMask(!activeObjectHidden)}
-                />
-            </CVATTooltip>
+            {!touchLayout ? (
+                <CVATTooltip title={`Hide mask ${normalizedKeyMap.SWITCH_HIDDEN}`}>
+                    <Button
+                        type='text'
+                        className={['cvat-brush-tools-hide', ...(activeObjectHidden ? ['cvat-brush-tools-active-tool'] : [])].join(' ')}
+                        icon={activeObjectHidden ? <EyeInvisibleFilled /> : <EyeOutlined />}
+                        onClick={() => hideMask(!activeObjectHidden)}
+                    />
+                </CVATTooltip>
+            ) : null}
             { !touchLayout && !editableState && !!applicableLabels.length && (
                 <LabelSelector
                     labels={applicableLabels}
@@ -436,6 +415,29 @@ function BrushTools(): React.ReactPortal | null {
                         }
                     }}
                 />
+            )}
+            {!editableState && (
+                <CVATTooltip title={`Continue ${normalizedKeyMap.SWITCH_REDRAW_MODE_STANDARD_CONTROLS}`}>
+                    <Button
+                        type={touchLayout ? 'primary' : 'text'}
+                        disabled={!!editableState}
+                        className='cvat-brush-tools-continue'
+                        icon={<Icon component={PlusIcon} />}
+                        onClick={() => {
+                            if (canvasInstance instanceof Canvas && defaultLabelID) {
+                                canvasInstance.draw({ enabled: false, continue: true });
+
+                                dispatch(
+                                    rememberObject({
+                                        activeObjectType: ObjectType.SHAPE,
+                                        activeShapeType: ShapeType.MASK,
+                                        activeLabelID: defaultLabelID,
+                                    }),
+                                );
+                            }
+                        }}
+                    />
+                </CVATTooltip>
             )}
             { touchLayout ? null : dragBar }
         </div>

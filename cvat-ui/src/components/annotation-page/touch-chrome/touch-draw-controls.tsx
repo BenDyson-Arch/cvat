@@ -7,11 +7,13 @@ import React, {
 } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import Button from 'antd/lib/button';
+import Dropdown from 'antd/lib/dropdown';
 import InputNumber from 'antd/lib/input-number';
 import Segmented from 'antd/lib/segmented';
 import Select from 'antd/lib/select';
 import Switch from 'antd/lib/switch';
-import Icon from '@ant-design/icons';
+import Icon, { DownOutlined } from '@ant-design/icons';
+import ReactDOM from 'react-dom';
 
 import {
     BrushIcon, CubeIcon, EllipseIcon, PointIcon, PolygonIcon, PolylineIcon, RectangleIcon, SkeletonIcon,
@@ -68,7 +70,7 @@ function applicableLabels(labels: Label[], shapeType: ShapeType): Label[] {
     });
 }
 
-export default function TouchDrawControls(): JSX.Element {
+export default function TouchDrawControls({ expanded }: { expanded: boolean }): JSX.Element {
     const dispatch = useDispatch();
     const { dockPanel, setDockPanel } = useTouchChrome();
     const {
@@ -92,6 +94,11 @@ export default function TouchDrawControls(): JSX.Element {
     const [rectMethod, setRectMethod] = useState<RectDrawingMethod>(RectDrawingMethod.CLASSIC);
     const [cuboidMethod, setCuboidMethod] = useState<CuboidDrawingMethod>(CuboidDrawingMethod.CLASSIC);
     const [simplifyPoly, setSimplifyPoly] = useState(false);
+    const [selectorHost, setSelectorHost] = useState<HTMLElement | null>(null);
+
+    useEffect(() => {
+        setSelectorHost(window.document.getElementById('cvat-touch-draw-selector'));
+    }, []);
 
     useEffect(() => {
         if (selectedLabel && selectedLabel.id !== activeLabelID) {
@@ -149,132 +156,160 @@ export default function TouchDrawControls(): JSX.Element {
         canvasInstance, labels, objectType, numberOfPoints, rectMethod, cuboidMethod, simplifyPoly, dispatch,
     ]);
 
+    const availableTools = DRAW_TOOLS.filter((tool) => visible[tool.visibleKey]);
+    const selectedTool = availableTools.find((tool) => tool.type === selectedShape) || availableTools[0];
+    const modeSelector = selectorHost && selectedTool ? ReactDOM.createPortal((
+        <Dropdown
+            trigger={['click']}
+            menu={{
+                selectedKeys: [selectedShape],
+                items: availableTools.map((tool) => ({
+                    key: tool.type,
+                    icon: <Icon component={tool.icon} />,
+                    label: tool.label,
+                    onClick: () => {
+                        setDockPanel('draw-tools');
+                        startDrawing(tool.type, activeLabelID, ObjectType.SHAPE);
+                    },
+                })),
+            }}
+        >
+            <Button
+                type='text'
+                className={`cvat-touch-mode-selector ${expanded ? 'cvat-touch-dock-button-active' : ''}`}
+                aria-label={`Annotation mode: ${selectedTool.label}`}
+            >
+                <Icon component={selectedTool.icon} />
+                <DownOutlined className='cvat-touch-mode-selector-chevron' />
+            </Button>
+        </Dropdown>
+    ), selectorHost) : null;
+
     return (
-        <div className='cvat-touch-draw-controls'>
-            <div className='cvat-touch-dock-rail cvat-touch-draw-tool-rail' aria-label='Drawing tools'>
-                {DRAW_TOOLS.filter((tool) => visible[tool.visibleKey]).map((tool) => (
-                    <Button
-                        type='text'
-                        key={tool.type}
-                        className={`cvat-touch-rail-button ${selectedShape === tool.type ? 'cvat-touch-rail-button-active' : ''}`}
-                        onClick={() => {
-                            setDockPanel('draw-tools');
-                            startDrawing(tool.type, activeLabelID, ObjectType.SHAPE);
-                        }}
-                    >
-                        <Icon component={tool.icon} />
-                        <span>{tool.label}</span>
-                    </Button>
-                ))}
-            </div>
-            <div className='cvat-touch-dock-rail cvat-touch-label-rail' aria-label='Annotation classes'>
-                {labelsForShape.slice(0, 10).map((label) => (
-                    <Button
-                        type='text'
-                        key={label.id}
-                        className={`cvat-touch-label-chip ${selectedLabel?.id === label.id ? 'cvat-touch-label-chip-active' : ''}`}
-                        onClick={() => startDrawing(selectedShape, label.id as number)}
-                    >
-                        <span className='cvat-touch-label-color' style={{ backgroundColor: label.color }} />
-                        <span>{label.name}</span>
-                    </Button>
-                ))}
-                {labelsForShape.length > 10 ? (
-                    <Select
-                        className='cvat-touch-label-overflow'
-                        value={selectedLabel?.id}
-                        options={labelsForShape.map((label) => ({
-                            value: label.id,
-                            label: label.name,
-                        }))}
-                        onChange={(labelID) => startDrawing(selectedShape, labelID)}
-                    />
-                ) : null}
-            </div>
-            {dockPanel === 'draw-settings' ? (
-                <div className='cvat-touch-dock-rail cvat-touch-draw-settings'>
-                    {selectedShape !== ShapeType.MASK ? (
-                        <Segmented
-                            value={objectType}
-                            options={[
-                                { label: 'Shape', value: ObjectType.SHAPE },
-                                { label: 'Track', value: ObjectType.TRACK },
-                            ]}
-                            onChange={(value) => {
-                                const next = value as ObjectType;
-                                setObjectType(next);
-                                startDrawing(selectedShape, selectedLabel?.id as number, next);
-                            }}
-                        />
-                    ) : null}
-                    {selectedShape === ShapeType.RECTANGLE ? (
-                        <Segmented
-                            value={rectMethod}
-                            options={[
-                                { label: '2 points', value: RectDrawingMethod.CLASSIC },
-                                { label: '4 points', value: RectDrawingMethod.EXTREME_POINTS },
-                            ]}
-                            onChange={(value) => {
-                                const next = value as RectDrawingMethod;
-                                setRectMethod(next);
-                                startDrawing(selectedShape, selectedLabel?.id as number, objectType, { rect: next });
-                            }}
-                        />
-                    ) : null}
-                    {selectedShape === ShapeType.CUBOID ? (
-                        <Segmented
-                            value={cuboidMethod}
-                            options={[
-                                { label: 'Classic', value: CuboidDrawingMethod.CLASSIC },
-                                { label: '4 points', value: CuboidDrawingMethod.CORNER_POINTS },
-                            ]}
-                            onChange={(value) => {
-                                const next = value as CuboidDrawingMethod;
-                                setCuboidMethod(next);
-                                startDrawing(selectedShape, selectedLabel?.id as number, objectType, { cuboid: next });
-                            }}
-                        />
-                    ) : null}
-                    {[ShapeType.POLYGON, ShapeType.POLYLINE, ShapeType.POINTS].includes(selectedShape) ? (
-                        <div className='cvat-touch-points-setting'>
-                            <span>Points</span>
-                            <InputNumber
-                                min={selectedShape === ShapeType.POLYGON ? 3 : 1}
-                                value={numberOfPoints}
-                                placeholder='Any'
-                                onChange={(value) => {
-                                    const next = typeof value === 'number' ? value : undefined;
-                                    setNumberOfPoints(next);
-                                    startDrawing(
-                                        selectedShape,
-                                        selectedLabel?.id as number,
-                                        objectType,
-                                        { points: next },
-                                    );
-                                }}
+        <>
+            {modeSelector}
+            {expanded ? (
+                <div className='cvat-touch-draw-controls'>
+                    <div className='cvat-touch-dock-rail cvat-touch-label-rail' aria-label='Annotation classes'>
+                        {labelsForShape.slice(0, 10).map((label) => (
+                            <Button
+                                type='text'
+                                key={label.id}
+                                className={`cvat-touch-label-chip ${selectedLabel?.id === label.id ? 'cvat-touch-label-chip-active' : ''}`}
+                                onClick={() => startDrawing(selectedShape, label.id as number)}
+                            >
+                                <span className='cvat-touch-label-color' style={{ backgroundColor: label.color }} />
+                                <span>{label.name}</span>
+                            </Button>
+                        ))}
+                        {labelsForShape.length > 10 ? (
+                            <Select
+                                className='cvat-touch-label-overflow'
+                                value={selectedLabel?.id}
+                                options={labelsForShape.map((label) => ({
+                                    value: label.id,
+                                    label: label.name,
+                                }))}
+                                onChange={(labelID) => startDrawing(selectedShape, labelID)}
                             />
-                        </div>
-                    ) : null}
-                    {[ShapeType.POLYGON, ShapeType.POLYLINE].includes(selectedShape) ? (
-                        <div className='cvat-touch-simplify-setting'>
-                            <span>Smooth</span>
-                            <Switch
-                                checked={simplifyPoly}
-                                disabled={typeof numberOfPoints !== 'undefined'}
-                                onChange={(checked) => {
-                                    setSimplifyPoly(checked);
-                                    startDrawing(
-                                        selectedShape,
-                                        selectedLabel?.id as number,
-                                        objectType,
-                                        { simplify: checked },
-                                    );
-                                }}
-                            />
+                        ) : null}
+                    </div>
+                    {dockPanel === 'draw-settings' ? (
+                        <div className='cvat-touch-dock-rail cvat-touch-draw-settings'>
+                            {selectedShape !== ShapeType.MASK ? (
+                                <Segmented
+                                    value={objectType}
+                                    options={[
+                                        { label: 'Shape', value: ObjectType.SHAPE },
+                                        { label: 'Track', value: ObjectType.TRACK },
+                                    ]}
+                                    onChange={(value) => {
+                                        const next = value as ObjectType;
+                                        setObjectType(next);
+                                        startDrawing(selectedShape, selectedLabel?.id as number, next);
+                                    }}
+                                />
+                            ) : null}
+                            {selectedShape === ShapeType.RECTANGLE ? (
+                                <Segmented
+                                    value={rectMethod}
+                                    options={[
+                                        { label: '2 points', value: RectDrawingMethod.CLASSIC },
+                                        { label: '4 points', value: RectDrawingMethod.EXTREME_POINTS },
+                                    ]}
+                                    onChange={(value) => {
+                                        const next = value as RectDrawingMethod;
+                                        setRectMethod(next);
+                                        startDrawing(
+                                            selectedShape,
+                                            selectedLabel?.id as number,
+                                            objectType,
+                                            { rect: next },
+                                        );
+                                    }}
+                                />
+                            ) : null}
+                            {selectedShape === ShapeType.CUBOID ? (
+                                <Segmented
+                                    value={cuboidMethod}
+                                    options={[
+                                        { label: 'Classic', value: CuboidDrawingMethod.CLASSIC },
+                                        { label: '4 points', value: CuboidDrawingMethod.CORNER_POINTS },
+                                    ]}
+                                    onChange={(value) => {
+                                        const next = value as CuboidDrawingMethod;
+                                        setCuboidMethod(next);
+                                        startDrawing(
+                                            selectedShape,
+                                            selectedLabel?.id as number,
+                                            objectType,
+                                            { cuboid: next },
+                                        );
+                                    }}
+                                />
+                            ) : null}
+                            {[ShapeType.POLYGON, ShapeType.POLYLINE, ShapeType.POINTS].includes(selectedShape) ? (
+                                <div className='cvat-touch-points-setting'>
+                                    <span>Points</span>
+                                    <InputNumber
+                                        min={selectedShape === ShapeType.POLYGON ? 3 : 1}
+                                        value={numberOfPoints}
+                                        placeholder='Any'
+                                        onChange={(value) => {
+                                            const next = typeof value === 'number' ? value : undefined;
+                                            setNumberOfPoints(next);
+                                            startDrawing(
+                                                selectedShape,
+                                                selectedLabel?.id as number,
+                                                objectType,
+                                                { points: next },
+                                            );
+                                        }}
+                                    />
+                                </div>
+                            ) : null}
+                            {[ShapeType.POLYGON, ShapeType.POLYLINE].includes(selectedShape) ? (
+                                <div className='cvat-touch-simplify-setting'>
+                                    <span>Smooth</span>
+                                    <Switch
+                                        checked={simplifyPoly}
+                                        disabled={typeof numberOfPoints !== 'undefined'}
+                                        onChange={(checked) => {
+                                            setSimplifyPoly(checked);
+                                            startDrawing(
+                                                selectedShape,
+                                                selectedLabel?.id as number,
+                                                objectType,
+                                                { simplify: checked },
+                                            );
+                                        }}
+                                    />
+                                </div>
+                            ) : null}
                         </div>
                     ) : null}
                 </div>
             ) : null}
-        </div>
+        </>
     );
 }

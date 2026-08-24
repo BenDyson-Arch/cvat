@@ -6,7 +6,7 @@ import React, { useCallback } from 'react';
 import { useSelector } from 'react-redux';
 import Button from 'antd/lib/button';
 import Icon, {
-    AppstoreOutlined, CheckCircleOutlined, CloseCircleOutlined, EditOutlined, SettingOutlined, UndoOutlined,
+    AppstoreOutlined, CheckCircleOutlined, CloseCircleOutlined, SettingOutlined, UndoOutlined,
 } from '@ant-design/icons';
 import { CursorIcon } from 'icons';
 
@@ -55,18 +55,47 @@ export default function TouchToolDock(): JSX.Element {
         }
     }, [canvasInstance, activeControl]);
 
-    const onDrawTap = useCallback(() => {
-        setDockPanel(dockPanel === 'draw-tools' ? 'primary' : 'draw-tools');
-    }, [dockPanel, setDockPanel]);
+    const drawControlsExpanded = drawing ||
+        ['draw-tools', 'draw-settings', 'mask-settings'].includes(dockPanel);
 
     return (
         <div className={`cvat-touch-tool-dock ${drawing ? 'cvat-touch-tool-dock-drawing' : ''}`}>
-            {(drawing || ['draw-tools', 'draw-settings', 'mask-settings'].includes(dockPanel)) ? (
-                <TouchDrawControls />
-            ) : null}
+            <TouchDrawControls expanded={drawControlsExpanded} />
             <TouchToolsSheet />
             <div className='cvat-touch-dock-primary-row'>
-                <div id={TOUCH_DOCK_EXTRAS_ID} className='cvat-touch-dock-extras' />
+                <div className='cvat-touch-dock-nav'>
+                    <Button
+                        type='text'
+                        className={`cvat-touch-dock-button ${selecting ? 'cvat-touch-dock-button-active' : ''}`}
+                        aria-label='Select'
+                        onClick={selectCursor}
+                    >
+                        <Icon component={CursorIcon} />
+                    </Button>
+                    <div id='cvat-touch-draw-selector' />
+                    {drawing ? (
+                        <Button
+                            type='text'
+                            className='cvat-touch-dock-button cvat-touch-dock-draw-chevron'
+                            aria-label='Drawing settings'
+                            onClick={() => setDockPanel(
+                                dockPanel === 'draw-settings' ? 'draw-tools' : 'draw-settings',
+                            )}
+                        >
+                            <SettingOutlined />
+                        </Button>
+                    ) : null}
+                    <Button
+                        type='text'
+                        className={`cvat-touch-dock-button ${dockPanel === 'annotation-tools' ? 'cvat-touch-dock-button-active' : ''}`}
+                        aria-label='Tools'
+                        onClick={() => setDockPanel(
+                            dockPanel === 'annotation-tools' ? 'primary' : 'annotation-tools',
+                        )}
+                    >
+                        <AppstoreOutlined />
+                    </Button>
+                </div>
                 {drawing && canvasInstance instanceof Canvas ? (
                     <div className='cvat-touch-dock-session'>
                         {canFinish && activeControl !== ActiveControl.DRAW_MASK ? (
@@ -97,48 +126,7 @@ export default function TouchToolDock(): JSX.Element {
                         />
                     </div>
                 ) : null}
-                <div className='cvat-touch-dock-nav'>
-                    <Button
-                        type='text'
-                        className={`cvat-touch-dock-button ${selecting ? 'cvat-touch-dock-button-active' : ''}`}
-                        aria-label='Select'
-                        onClick={selectCursor}
-                    >
-                        <Icon component={CursorIcon} />
-                    </Button>
-                    <div className={`cvat-touch-dock-draw ${drawing || dockPanel === 'draw-tools' ? 'cvat-touch-dock-button-active' : ''}`}>
-                        <Button
-                            type='text'
-                            className='cvat-touch-dock-button cvat-touch-dock-draw-main'
-                            aria-label='Draw'
-                            onClick={onDrawTap}
-                        >
-                            <EditOutlined />
-                        </Button>
-                        {drawing ? (
-                            <Button
-                                type='text'
-                                className='cvat-touch-dock-button cvat-touch-dock-draw-chevron'
-                                aria-label='Drawing settings'
-                                onClick={() => setDockPanel(
-                                    dockPanel === 'draw-settings' ? 'draw-tools' : 'draw-settings',
-                                )}
-                            >
-                                <SettingOutlined />
-                            </Button>
-                        ) : null}
-                    </div>
-                    <Button
-                        type='text'
-                        className={`cvat-touch-dock-button ${dockPanel === 'annotation-tools' ? 'cvat-touch-dock-button-active' : ''}`}
-                        aria-label='Tools'
-                        onClick={() => setDockPanel(
-                            dockPanel === 'annotation-tools' ? 'primary' : 'annotation-tools',
-                        )}
-                    >
-                        <AppstoreOutlined />
-                    </Button>
-                </div>
+                <div id={TOUCH_DOCK_EXTRAS_ID} className='cvat-touch-dock-extras' />
             </div>
         </div>
     );

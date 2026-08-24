@@ -637,24 +637,43 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
             });
             cy.get('.cvat-header').should('not.be.visible');
             cy.get('.cvat-canvas-layer-stack-trigger').should('not.be.visible');
-            cy.get('.cvat-touch-tool-dock [aria-label="Draw"]').click();
-            cy.get('.cvat-touch-draw-tool-rail').should('be.visible');
+            cy.get('.cvat-touch-tool-dock [aria-label="Select"]').then(([$select]) => {
+                cy.get('.cvat-touch-mode-selector').then(([$mode]) => {
+                    expect($select.getBoundingClientRect().left).to.be.lessThan(
+                        $mode.getBoundingClientRect().left,
+                    );
+                });
+            });
+            cy.get('.cvat-touch-mode-selector').click();
+            cy.contains('.ant-dropdown-menu-item', 'Box').click();
             cy.get('.ant-drawer-open').should('not.exist');
-            cy.contains('.cvat-touch-rail-button', 'Box').click();
             cy.get('.cvat-touch-label-chip-active').should('contain.text', 'mask label');
             cy.get('.cvat-touch-tool-dock [aria-label="Drawing settings"]').click();
             cy.contains('.cvat-touch-draw-settings', 'Shape').should('be.visible');
-            cy.contains('.cvat-touch-rail-button', 'Mask').click();
+            cy.get('.cvat-touch-mode-selector').click();
+            cy.contains('.ant-dropdown-menu-item', 'Mask').click();
             cy.get('.cvat-touch-tool-dock [aria-label="Done"]').should('not.exist');
             cy.get('.cvat-touch-tool-dock [aria-label="Pan"]').should('not.exist');
             cy.get('.cvat-touch-tool-dock .cvat-brush-tools-polygon-plus').should('not.exist');
             cy.get('.cvat-touch-tool-dock .cvat-brush-tools-polygon-minus').should('not.exist');
+            cy.get('.cvat-touch-tool-dock .cvat-brush-tools-hide').should('not.exist');
+            cy.get('.cvat-touch-tool-dock .ant-select').should('not.exist');
             cy.get('.cvat-touch-brush-size-control .ant-slider').should('be.visible')
                 .click('right');
             cy.get('.cvat-touch-brush-size-value').invoke('text').then((value) => {
                 expect(Number(value)).to.be.greaterThan(10);
             });
-            cy.get('.cvat-touch-tool-dock .cvat-brush-tools-continue').click();
+            cy.get('.cvat-touch-tool-dock .cvat-brush-tools-continue')
+                .should('have.class', 'ant-btn-primary')
+                .then(([$next]) => {
+                    cy.get('.cvat-touch-tool-dock').then(([$dock]) => {
+                        expect($next.getBoundingClientRect().right).to.be.closeTo(
+                            $dock.getBoundingClientRect().right,
+                            20,
+                        );
+                    });
+                })
+                .click();
             cy.get('.cvat_native_touch_masks_canvas:visible').should('exist');
             cy.get('.cvat-touch-tool-dock .cvat-brush-tools-brush')
                 .should('have.class', 'cvat-brush-tools-active-tool');

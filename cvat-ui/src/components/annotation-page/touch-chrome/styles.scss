@@ -141,7 +141,7 @@ html.cvat-touch-layout {
     .cvat-touch-dock-primary-row {
         display: flex;
         align-items: center;
-        justify-content: center;
+        justify-content: flex-start;
         gap: 4px;
         width: 100%;
         min-width: 0;
@@ -151,6 +151,7 @@ html.cvat-touch-layout {
         display: flex;
         align-items: center;
         gap: 4px;
+        flex: 1;
         min-width: 0;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
@@ -160,16 +161,21 @@ html.cvat-touch-layout {
         display: flex;
         align-items: center;
         gap: 4px;
+        flex: none;
     }
 
     .cvat-brush-tools-toolbox,
     .cvat-brush-tools-toolbox-touch {
         position: static;
+        display: flex;
+        align-items: center;
         margin: 0;
         padding: 0;
         box-shadow: none;
         background: transparent;
         max-width: 100%;
+        width: 100%;
+        flex: 1;
         overflow-x: auto;
         -webkit-overflow-scrolling: touch;
 
@@ -185,6 +191,13 @@ html.cvat-touch-layout {
         > button {
             min-width: 44px;
             min-height: 44px;
+        }
+
+        .cvat-brush-tools-continue.ant-btn-primary {
+            flex: none;
+            margin-left: auto;
+            border-radius: 14px;
+            color: #fff;
         }
 
         .cvat-brush-tools-brush-size {
@@ -250,6 +263,31 @@ html.cvat-touch-layout {
 
     .cvat-touch-dock-done.ant-btn-primary {
         color: #fff;
+    }
+
+    #cvat-touch-draw-selector {
+        display: flex;
+        flex: none;
+    }
+
+    .cvat-touch-mode-selector {
+        min-width: 58px;
+        height: 44px;
+        padding: 0 10px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+
+        &.cvat-touch-dock-button-active {
+            background: $header-color;
+        }
+    }
+
+    .cvat-touch-mode-selector-chevron {
+        font-size: 10px;
+        opacity: 0.65;
     }
 
     .cvat-touch-dock-draw {
@@ -428,15 +466,6 @@ html.cvat-touch-layout {
 
 @media (orientation: landscape) and (height <= 820px) {
     .cvat-touch-tool-dock {
-        .cvat-touch-draw-controls {
-            display: grid;
-            grid-template-columns: minmax(0, 3fr) minmax(240px, 2fr);
-        }
-
-        .cvat-touch-draw-settings {
-            grid-column: 1 / -1;
-        }
-
         .cvat-touch-rail-button {
             min-height: 44px;
             height: 44px;
