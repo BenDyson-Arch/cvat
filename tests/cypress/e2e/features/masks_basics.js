@@ -95,7 +95,9 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
         }
 
         function readTemporaryMaskPixelAlpha(clientX, clientY) {
-            return cy.get('.cvat_masks_canvas_wrapper .lower-canvas').then(([$canvas]) => {
+            return cy.get(
+                '.cvat_native_touch_masks_canvas:visible, .cvat_masks_canvas_wrapper .lower-canvas:visible',
+            ).first().then(([$canvas]) => {
                 const rect = $canvas.getBoundingClientRect();
                 const x = Math.round((clientX - rect.left) * ($canvas.width / rect.width));
                 const y = Math.round((clientY - rect.top) * ($canvas.height / rect.height));
@@ -600,5 +602,320 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
 
             checkMaskNotEmpty('#cvat_canvas_shape_1');
         });
+
+        // Pointer phases intentionally share one subject to preserve capture ordering.
+        /* eslint-disable cypress/unsafe-to-chain-command */
+        it('Shows native Pencil mask preview before pointerup and preserves annotations', () => {
+            function readNativeMaskPixelAlpha(clientX, clientY) {
+                return cy.get('.cvat_native_touch_masks_canvas:visible').then(([$canvas]) => {
+                    const rect = $canvas.getBoundingClientRect();
+                    const x = Math.round((clientX - rect.left) * ($canvas.width / rect.width));
+                    const y = Math.round((clientY - rect.top) * ($canvas.height / rect.height));
+                    return $canvas.getContext('2d').getImageData(x, y, 1, 1).data[3];
+                });
+            }
+
+            cy.visit(`/tasks/${taskId}/jobs/${jobId}`, {
+                onBeforeLoad(win) {
+                    Object.defineProperty(win.navigator, 'userAgent', {
+                        configurable: true,
+                        value: 'Mozilla/5.0 (iPad; CPU OS 17_0 like Mac OS X)',
+                    });
+                    Object.defineProperty(win.navigator, 'maxTouchPoints', {
+                        configurable: true,
+                        value: 5,
+                    });
+                },
+            });
+            cy.get('.cvat-canvas-container').should('be.visible');
+            cy.startMaskDrawing();
+
+            cy.get('#cvat_canvas_wrapper')
+                .trigger('pointerdown', {
+                    pointerId: 71,
+                    pointerType: 'pen',
+                    pressure: 0.4,
+                    button: 0,
+                    buttons: 1,
+                    clientX: 350,
+                    clientY: 350,
+                })
+                .trigger('pointermove', {
+                    pointerId: 71,
+                    pointerType: 'pen',
+                    pressure: 0.8,
+                    button: -1,
+                    buttons: 1,
+                    clientX: 500,
+                    clientY: 350,
+                });
+            readNativeMaskPixelAlpha(425, 350).should('be.greaterThan', 0);
+            cy.get('#cvat_canvas_wrapper').trigger('pointerup', {
+                pointerId: 71,
+                pointerType: 'pen',
+                pressure: 0,
+                button: 0,
+                buttons: 0,
+                clientX: 500,
+                clientY: 350,
+            });
+            cy.finishMaskDrawing();
+            cy.get('#cvat_canvas_shape_1').should('be.visible');
+
+            cy.startMaskDrawing();
+            cy.get('#cvat_canvas_shape_1').should('be.visible');
+            cy.get('#cvat_canvas_wrapper')
+                .trigger('pointerdown', {
+                    pointerId: 72,
+                    pointerType: 'pen',
+                    pressure: 0.5,
+                    button: 0,
+                    buttons: 1,
+                    clientX: 350,
+                    clientY: 450,
+                })
+                .trigger('pointermove', {
+                    pointerId: 72,
+                    pointerType: 'pen',
+                    pressure: 0.7,
+                    button: -1,
+                    buttons: 1,
+                    clientX: 500,
+                    clientY: 450,
+                });
+            readNativeMaskPixelAlpha(425, 450).should('be.greaterThan', 0);
+            cy.get('#cvat_canvas_shape_1').should('be.visible');
+            cy.get('#cvat_canvas_wrapper').trigger('pointerup', {
+                pointerId: 72,
+                pointerType: 'pen',
+                pressure: 0,
+                button: 0,
+                buttons: 0,
+                clientX: 500,
+                clientY: 450,
+            });
+            cy.finishMaskDrawing();
+            cy.get('#cvat_canvas_shape_2').should('be.visible');
+
+            cy.interactControlButton('draw-rectangle');
+            cy.switchLabel('mask label', 'draw-rectangle');
+            cy.get('.cvat-draw-rectangle-popover').within(() => {
+                cy.contains('.ant-radio-wrapper', 'By 2 Points').click();
+                cy.contains('button', 'Shape').click();
+            });
+            cy.get('#cvat_canvas_wrapper')
+                .trigger('pointerdown', {
+                    pointerId: 73,
+                    pointerType: 'pen',
+                    pressure: 0.5,
+                    button: 0,
+                    buttons: 1,
+                    clientX: 300,
+                    clientY: 250,
+                })
+                .trigger('pointermove', {
+                    pointerId: 73,
+                    pointerType: 'pen',
+                    pressure: 0.5,
+                    button: -1,
+                    buttons: 1,
+                    clientX: 550,
+                    clientY: 500,
+                });
+            cy.get('.cvat_canvas_shape_drawing').should('be.visible').then(($shape) => {
+                expect($shape[0].getBoundingClientRect().width).to.be.greaterThan(1);
+                expect($shape[0].getBoundingClientRect().height).to.be.greaterThan(1);
+                const beforePalm = $shape[0].getBoundingClientRect();
+                cy.get('#cvat_canvas_wrapper')
+                    .trigger('pointerdown', {
+                        pointerId: 74,
+                        pointerType: 'touch',
+                        pressure: 0.5,
+                        width: 30,
+                        height: 30,
+                        button: 0,
+                        buttons: 1,
+                        clientX: 700,
+                        clientY: 600,
+                    })
+                    .trigger('pointermove', {
+                        pointerId: 74,
+                        pointerType: 'touch',
+                        pressure: 0.5,
+                        width: 30,
+                        height: 30,
+                        button: -1,
+                        buttons: 1,
+                        clientX: 760,
+                        clientY: 650,
+                    });
+                cy.get('.cvat_canvas_shape_drawing').then(($afterPalm) => {
+                    const afterPalm = $afterPalm[0].getBoundingClientRect();
+                    expect(afterPalm.left).to.equal(beforePalm.left);
+                    expect(afterPalm.top).to.equal(beforePalm.top);
+                    expect(afterPalm.width).to.equal(beforePalm.width);
+                    expect(afterPalm.height).to.equal(beforePalm.height);
+                });
+            });
+            cy.get('#cvat_canvas_wrapper').trigger('pointerup', {
+                pointerId: 74,
+                pointerType: 'touch',
+                pressure: 0,
+                width: 30,
+                height: 30,
+                button: 0,
+                buttons: 0,
+                clientX: 760,
+                clientY: 650,
+            });
+            cy.get('#cvat_canvas_wrapper').trigger('pointerup', {
+                pointerId: 73,
+                pointerType: 'pen',
+                pressure: 0,
+                button: 0,
+                buttons: 0,
+                clientX: 550,
+                clientY: 500,
+            }).then(([$wrapper]) => {
+                expect($wrapper.hasPointerCapture(73)).to.be.false;
+            });
+            cy.get('#cvat_canvas_shape_3').should('be.visible');
+
+            cy.interactControlButton('draw-rectangle');
+            cy.get('.cvat-draw-rectangle-popover').within(() => {
+                cy.contains('.ant-radio-wrapper', 'By 2 Points').click();
+                cy.contains('button', 'Shape').click();
+            });
+            cy.get('#cvat_canvas_wrapper')
+                .trigger('pointerdown', {
+                    pointerId: 75,
+                    pointerType: 'touch',
+                    pressure: 0.35,
+                    width: 1,
+                    height: 1,
+                    button: 0,
+                    buttons: 1,
+                    clientX: 600,
+                    clientY: 250,
+                })
+                .trigger('pointermove', {
+                    pointerId: 75,
+                    pointerType: 'touch',
+                    pressure: 0.75,
+                    width: 1,
+                    height: 1,
+                    button: -1,
+                    buttons: 1,
+                    clientX: 750,
+                    clientY: 400,
+                });
+            cy.get('.cvat_canvas_shape_drawing').should('be.visible');
+            cy.get('#cvat_canvas_wrapper').trigger('pointerup', {
+                pointerId: 75,
+                pointerType: 'touch',
+                pressure: 0,
+                width: 1,
+                height: 1,
+                button: 0,
+                buttons: 0,
+                clientX: 750,
+                clientY: 400,
+            });
+            cy.get('#cvat_canvas_shape_4').should('be.visible');
+
+            cy.get('#cvat_canvas_background').then(($background) => {
+                const initialLeft = $background[0].style.left;
+                cy.get('#cvat_canvas_wrapper')
+                    .trigger('pointerdown', {
+                        pointerId: 81,
+                        pointerType: 'touch',
+                        pressure: 0.5,
+                        width: 30,
+                        height: 30,
+                        button: 0,
+                        buttons: 1,
+                        clientX: 400,
+                        clientY: 550,
+                    })
+                    .trigger('pointermove', {
+                        pointerId: 81,
+                        pointerType: 'touch',
+                        pressure: 0.5,
+                        width: 30,
+                        height: 30,
+                        button: -1,
+                        buttons: 1,
+                        clientX: 430,
+                        clientY: 550,
+                    });
+                cy.get('#cvat_canvas_background').should(($panned) => {
+                    expect($panned[0].style.left).not.to.equal(initialLeft);
+                });
+            });
+            cy.get('#cvat_canvas_background').then(($background) => {
+                const initialTransform = $background[0].style.transform;
+                cy.get('#cvat_canvas_wrapper')
+                    .trigger('pointerdown', {
+                        pointerId: 82,
+                        pointerType: 'touch',
+                        pressure: 0.5,
+                        width: 30,
+                        height: 30,
+                        button: 0,
+                        buttons: 1,
+                        clientX: 600,
+                        clientY: 550,
+                    })
+                    .trigger('pointermove', {
+                        pointerId: 82,
+                        pointerType: 'touch',
+                        pressure: 0.5,
+                        width: 30,
+                        height: 30,
+                        button: -1,
+                        buttons: 1,
+                        clientX: 660,
+                        clientY: 550,
+                    });
+                cy.get('#cvat_canvas_background').should(($pinched) => {
+                    expect($pinched[0].style.transform).not.to.equal(initialTransform);
+                });
+            });
+            cy.get('#cvat_canvas_wrapper')
+                .trigger('pointerup', {
+                    pointerId: 82,
+                    pointerType: 'touch',
+                    pressure: 0,
+                    width: 30,
+                    height: 30,
+                    button: 0,
+                    buttons: 0,
+                    clientX: 660,
+                    clientY: 550,
+                })
+                .trigger('pointermove', {
+                    pointerId: 81,
+                    pointerType: 'touch',
+                    pressure: 0.5,
+                    width: 30,
+                    height: 30,
+                    button: -1,
+                    buttons: 1,
+                    clientX: 460,
+                    clientY: 550,
+                })
+                .trigger('pointerup', {
+                    pointerId: 81,
+                    pointerType: 'touch',
+                    pressure: 0,
+                    width: 30,
+                    height: 30,
+                    button: 0,
+                    buttons: 0,
+                    clientX: 460,
+                    clientY: 550,
+                });
+        });
+        /* eslint-enable cypress/unsafe-to-chain-command */
     });
 });

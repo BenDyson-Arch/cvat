@@ -13,7 +13,6 @@ import { DrawHandler } from './drawHandler';
 import {
     PropType, computeWrappingBox, imageDataToRLE, RLEToImageData, imageDataToDataURL,
 } from './shared';
-import { isPointerEvent, isPrimaryDrawButton, isTouchPointer, penPressure } from './pointer';
 
 interface WrappingBBox {
     left: number;
@@ -75,75 +74,13 @@ export class MasksHandlerImpl implements MasksHandler {
     private geometry: Geometry;
     private drawingOpacity: number;
     private isHidden: boolean;
-    private windowPointerMove: ((event: PointerEvent) => void) | null;
 
     private keepDrawnPolygon(): void {
         const canvasWrapper = this.canvas.getElement().parentElement;
         canvasWrapper.style.pointerEvents = '';
         canvasWrapper.style.zIndex = '';
         this.isPolygonDrawing = false;
-        this.setSvgPointerEvents(false);
         this.vectorDrawHandler.draw({ enabled: false }, this.geometry);
-    }
-
-    private getOverlayWrapper(): HTMLDivElement | null {
-        return this.canvas.getElement().parentElement as HTMLDivElement | null;
-    }
-
-    private getCanvasContent(): HTMLElement | null {
-        return this.getOverlayWrapper()?.parentElement?.querySelector('#cvat_canvas_content') as HTMLElement | null;
-    }
-
-    private setSvgPointerEvents(enabled: boolean): void {
-        const content = this.getCanvasContent();
-        if (content) {
-            content.style.pointerEvents = enabled ? 'all' : 'none';
-        }
-    }
-
-    private showMaskOverlay(): void {
-        const wrapper = this.getOverlayWrapper();
-        if (!wrapper) {
-            return;
-        }
-        wrapper.style.display = 'block';
-        this.applyOverlayLayout();
-        this.setSvgPointerEvents(!this.isPolygonDrawing);
-    }
-
-    private applyOverlayLayout(): void {
-        if (!this.geometry) {
-            return;
-        }
-        const wrapper = this.getOverlayWrapper();
-        if (!wrapper) {
-            return;
-        }
-        const {
-            scale, angle, image: { width, height }, top, left,
-        } = this.geometry;
-        const visualWidth = width * scale;
-        const visualHeight = height * scale;
-
-        wrapper.style.position = 'absolute';
-        wrapper.style.background = 'transparent';
-        wrapper.style.left = `${left + width * (1 - scale) / 2}px`;
-        wrapper.style.top = `${top + height * (1 - scale) / 2}px`;
-        wrapper.style.width = `${visualWidth}px`;
-        wrapper.style.height = `${visualHeight}px`;
-        wrapper.style.transformOrigin = 'center center';
-        wrapper.style.transform = angle ? `rotate(${angle}deg)` : 'none';
-        if (!this.isPolygonDrawing) {
-            wrapper.style.pointerEvents = 'all';
-            wrapper.style.zIndex = '3';
-        }
-
-        for (const canvasEl of wrapper.querySelectorAll('canvas')) {
-            const el = canvasEl as HTMLCanvasElement;
-            el.style.background = 'transparent';
-            el.style.width = `${visualWidth}px`;
-            el.style.height = `${visualHeight}px`;
-        }
     }
 
     private removeBrushMarker(): void {
@@ -186,8 +123,6 @@ export class MasksHandlerImpl implements MasksHandler {
         canvasWrapper.style.pointerEvents = '';
         canvasWrapper.style.zIndex = '';
         canvasWrapper.style.display = '';
-        this.setSvgPointerEvents(true);
-        this.stopWindowPointerMove();
     }
 
     private releasePaste(): void {
@@ -376,9 +311,6 @@ export class MasksHandlerImpl implements MasksHandler {
             this.tool = { ...brushTool, ...opts };
             if (this.isDrawing || this.isEditing) {
                 this.setupBrushMarker();
-                if (!this.tool?.type?.startsWith('polygon-')) {
-                    this.setSvgPointerEvents(false);
-                }
             }
 
             this.updateBlockedTools();
@@ -419,7 +351,6 @@ export class MasksHandlerImpl implements MasksHandler {
             const canvasWrapper = this.canvas.getElement().parentElement as HTMLDivElement;
             canvasWrapper.style.pointerEvents = 'none';
             canvasWrapper.style.zIndex = '0';
-            this.setSvgPointerEvents(true);
         }
     }
 
@@ -460,216 +391,6 @@ export class MasksHandlerImpl implements MasksHandler {
         });
     }
 
-    private stopWindowPointerMove(): void {
-        if (this.windowPointerMove) {
-            window.removeEventListener('pointermove', this.windowPointerMove);
-            this.windowPointerMove = null;
-        }
-    }
-
-    private imagePositionFromEvent(
-        event: MouseEvent,
-        fabricPointer?: { x: number; y: number },
-    ): Position {
-        const { image: { width: imageWidth, height: imageHeight } } = this.geometry;
-        const { angle } = this.geometry;
-        const pointer = fabricPointer || this.canvas.getPointer(event);
-        let { x, y } = pointer;
-        if (angle === 180) {
-            [x, y] = [imageWidth - x, imageHeight - y];
-        } else if (angle === 270) {
-            [x, y] = [imageWidth - (y / imageHeight) * imageWidth, (x / imageWidth) * imageHeight];
-        } else if (angle === 90) {
-            [x, y] = [(y / imageHeight) * imageWidth, imageHeight - (x / imageWidth) * imageHeight];
-        }
-        return { x, y };
-    }
-
-    private handleDrawMove(event: MouseEvent, fabricPointer?: { x: number; y: number }): void {
-        if (!this.geometry || isTouchPointer(event)) {
-            return;
-        }
-
-        const position = this.imagePositionFromEvent(event, fabricPointer);
-        const {
-            tool, isMouseDown, isInsertion, isBrushSizeChanging,
-        } = this;
-
-        if (isInsertion) {
-            const [object] = this.drawnObjects;
-            if (object && object instanceof fabric.Image) {
-                object.left = position.x - object.width / 2;
-                object.top = position.y - object.height / 2;
-                this.canvas.renderAll();
-            }
-        }
-
-        if (isBrushSizeChanging && ['brush', 'eraser'].includes(tool?.type)) {
-            const raw = fabricPointer || this.canvas.getPointer(event);
-            const xDiff = raw.x - this.resizeBrushToolLatestX;
-            let onUpdateConfiguration = null;
-            if (this.isDrawing) {
-                onUpdateConfiguration = this.drawData.onUpdateConfiguration;
-            } else if (this.isEditing) {
-                onUpdateConfiguration = this.editData.onUpdateConfiguration;
-            }
-            if (onUpdateConfiguration) {
-                onUpdateConfiguration({
-                    brushTool: {
-                        size: Math.trunc(Math.max(1, this.tool.size + xDiff)),
-                    },
-                });
-            }
-
-            this.resizeBrushToolLatestX = raw.x;
-            event.stopPropagation();
-            return;
-        }
-
-        if (this.brushMarker) {
-            this.brushMarker.left = position.x - tool.size / 2;
-            this.brushMarker.top = position.y - tool.size / 2;
-            this.canvas.bringToFront(this.brushMarker);
-            this.canvas.renderAll();
-        }
-
-        if (isMouseDown && !this.isHidden && !isBrushSizeChanging && ['brush', 'eraser'].includes(tool?.type)) {
-            const color = fabric.Color.fromHex(tool.color);
-            color.setAlpha(tool.type === 'eraser' ? 1 : 0.5);
-            const size = Math.max(1, Math.round(tool.size * penPressure(event, 1)));
-
-            const commonProperties = {
-                selectable: false,
-                evented: false,
-                globalCompositeOperation: tool.type === 'eraser' ? 'destination-out' : 'xor',
-            };
-
-            const shapeProperties = {
-                ...commonProperties,
-                fill: color.toRgba(),
-                left: position.x - size / 2,
-                top: position.y - size / 2,
-            };
-
-            let shape: fabric.Circle | fabric.Rect | null = null;
-            if (tool.form === 'circle') {
-                shape = new fabric.Circle({
-                    ...shapeProperties,
-                    radius: Math.round(size / 2),
-                });
-            } else if (tool.form === 'square') {
-                shape = new fabric.Rect({
-                    ...shapeProperties,
-                    width: size,
-                    height: size,
-                });
-            }
-
-            if (['brush', 'eraser'].includes(tool?.type)) {
-                this.addDrawnObject(shape);
-            }
-
-            if (this.latestMousePos.x !== -1 && this.latestMousePos.y !== -1) {
-                const dx = position.x - this.latestMousePos.x;
-                const dy = position.y - this.latestMousePos.y;
-                if (Math.sqrt(dx ** 2 + dy ** 2) > tool.size / 2) {
-                    const line = new fabric.Line([
-                        this.latestMousePos.x - tool.size / 2,
-                        this.latestMousePos.y - tool.size / 2,
-                        position.x - tool.size / 2,
-                        position.y - tool.size / 2,
-                    ], {
-                        ...commonProperties,
-                        stroke: color.toRgba(),
-                        strokeWidth: tool.size,
-                        strokeLineCap: tool.form === 'circle' ? 'round' : 'square',
-                    });
-
-                    if (['brush', 'eraser'].includes(tool?.type)) {
-                        this.addDrawnObject(line);
-                    }
-                }
-            }
-            this.canvas.renderAll();
-        } else if (tool?.type.startsWith('polygon-') && this.drawablePolygon) {
-            const points = this.drawablePolygon.get('points');
-            if (points.length) {
-                points[points.length - 1].setX(event.offsetX);
-                points[points.length - 1].setY(event.offsetY);
-            }
-            this.canvas.renderAll();
-        }
-
-        this.latestMousePos.x = position.x;
-        this.latestMousePos.y = position.y;
-        this.resizeBrushToolLatestX = position.x;
-    }
-
-    private onMaskPointerDown(event: PointerEvent): void {
-        if (isTouchPointer(event) || this.isPolygonDrawing) {
-            return;
-        }
-        const { isDrawing, isEditing, isInsertion } = this;
-        if (!(isDrawing || isEditing || isInsertion)) {
-            return;
-        }
-
-        this.isMouseDown = (isDrawing || isEditing) && isPrimaryDrawButton(event) && !event.altKey;
-        this.isBrushSizeChanging = (isDrawing || isEditing) && event.button === 2 && event.altKey;
-
-        if (this.isMouseDown && !isInsertion && ['brush', 'eraser'].includes(this.tool?.type)) {
-            this.startHistoryAction();
-        }
-
-        if (isInsertion) {
-            const continueInserting = event.ctrlKey;
-            const wrappingBbox = this.getDrawnObjectsWrappingBox();
-            const imageData = this.imageDataFromCanvas(wrappingBbox);
-            const rle = imageDataToRLE(imageData);
-            rle.push(wrappingBbox.left, wrappingBbox.top, wrappingBbox.right, wrappingBbox.bottom);
-
-            this.onDrawDone({
-                occluded: this.drawData.initialState.occluded,
-                attributes: { ...this.drawData.initialState.attributes },
-                color: this.drawData.initialState.color,
-                objectType: this.drawData.initialState.objectType,
-                shapeType: this.drawData.shapeType,
-                points: rle,
-                label: this.drawData.initialState.label,
-            }, Date.now() - this.startTimestamp, continueInserting, this.drawData);
-
-            if (!continueInserting) {
-                this.releasePaste();
-            }
-            return;
-        }
-
-        if (this.isMouseDown || isInsertion) {
-            try {
-                this.getOverlayWrapper()?.setPointerCapture(event.pointerId);
-            } catch (_error) {
-                // some hosts cannot capture
-            }
-        }
-
-        this.stopWindowPointerMove();
-        this.windowPointerMove = (moveEvent: PointerEvent): void => {
-            this.onMaskPointerMove(moveEvent);
-        };
-        window.addEventListener('pointermove', this.windowPointerMove);
-        this.handleDrawMove(event);
-    }
-
-    private onMaskPointerMove(event: PointerEvent): void {
-        if (isTouchPointer(event) || this.isPolygonDrawing) {
-            return;
-        }
-        if (!(this.isDrawing || this.isEditing || this.isInsertion)) {
-            return;
-        }
-        this.handleDrawMove(event);
-    }
-
     public constructor(
         onDrawDone: MasksHandlerImpl['onDrawDone'],
         onDrawRepeat: MasksHandlerImpl['onDrawRepeat'],
@@ -689,7 +410,6 @@ export class MasksHandlerImpl implements MasksHandler {
         this.drawingOpacity = 0.5;
         this.brushMarker = null;
         this.isHidden = false;
-        this.windowPointerMove = null;
         this.colorBy = ColorBy.LABEL;
         this.onDrawDone = onDrawDone;
         this.onDrawRepeat = onDrawRepeat;
@@ -701,37 +421,22 @@ export class MasksHandlerImpl implements MasksHandler {
             fireRightClick: true,
             selection: false,
             defaultCursor: 'inherit',
-            enablePointerEvents: true,
-        } as fabric.ICanvasOptions);
+        });
         this.canvas.imageSmoothingEnabled = false;
         this.drawnObjects = this.createDrawnObjectsArray();
         this.clearHistory();
 
         this.canvas.getElement().parentElement.addEventListener('contextmenu', (e: MouseEvent) => e.preventDefault());
-        const overlay = this.canvas.getElement().parentElement as HTMLDivElement;
-        overlay.addEventListener('pointerdown', (event: PointerEvent) => this.onMaskPointerDown(event), {
-            capture: true,
-            passive: false,
-        });
         this.latestMousePos = { x: -1, y: -1 };
         window.document.addEventListener('mouseup', () => {
             this.finishHistoryAction();
             this.isMouseDown = false;
             this.isBrushSizeChanging = false;
         });
-        window.document.addEventListener('pointerup', () => {
-            this.finishHistoryAction();
-            this.isMouseDown = false;
-            this.isBrushSizeChanging = false;
-            this.stopWindowPointerMove();
-        });
 
         this.canvas.on('mouse:down', (options: fabric.IEvent<MouseEvent>) => {
-            if (isPointerEvent(options.e) || isTouchPointer(options.e)) {
-                return;
-            }
             const { isDrawing, isEditing, isInsertion } = this;
-            this.isMouseDown = (isDrawing || isEditing) && isPrimaryDrawButton(options.e) && !options.e.altKey;
+            this.isMouseDown = (isDrawing || isEditing) && options.e.button === 0 && !options.e.altKey;
             this.isBrushSizeChanging = (isDrawing || isEditing) && options.e.button === 2 && options.e.altKey;
 
             if (this.isMouseDown && !isInsertion && ['brush', 'eraser'].includes(this.tool?.type)) {
@@ -739,17 +444,155 @@ export class MasksHandlerImpl implements MasksHandler {
             }
 
             if (isInsertion) {
-                this.onMaskPointerDown(options.e as unknown as PointerEvent);
+                const continueInserting = options.e.ctrlKey;
+                const wrappingBbox = this.getDrawnObjectsWrappingBox();
+                const imageData = this.imageDataFromCanvas(wrappingBbox);
+                const rle = imageDataToRLE(imageData);
+                rle.push(wrappingBbox.left, wrappingBbox.top, wrappingBbox.right, wrappingBbox.bottom);
+
+                this.onDrawDone({
+                    occluded: this.drawData.initialState.occluded,
+                    attributes: { ...this.drawData.initialState.attributes },
+                    color: this.drawData.initialState.color,
+                    objectType: this.drawData.initialState.objectType,
+                    shapeType: this.drawData.shapeType,
+                    points: rle,
+                    label: this.drawData.initialState.label,
+                }, Date.now() - this.startTimestamp, continueInserting, this.drawData);
+
+                if (!continueInserting) {
+                    this.releasePaste();
+                }
             } else {
-                this.handleDrawMove(options.e, options.pointer);
+                this.canvas.fire('mouse:move', options);
             }
         });
 
         this.canvas.on('mouse:move', (e: fabric.IEvent<MouseEvent>) => {
-            if (isPointerEvent(e.e) || isTouchPointer(e.e)) {
+            const { image: { width: imageWidth, height: imageHeight } } = this.geometry;
+            const { angle } = this.geometry;
+            let [x, y] = [e.pointer.x, e.pointer.y];
+            if (angle === 180) {
+                [x, y] = [imageWidth - x, imageHeight - y];
+            } else if (angle === 270) {
+                [x, y] = [imageWidth - (y / imageHeight) * imageWidth, (x / imageWidth) * imageHeight];
+            } else if (angle === 90) {
+                [x, y] = [(y / imageHeight) * imageWidth, imageHeight - (x / imageWidth) * imageHeight];
+            }
+
+            const position = { x, y };
+            const {
+                tool, isMouseDown, isInsertion, isBrushSizeChanging,
+            } = this;
+
+            if (isInsertion) {
+                const [object] = this.drawnObjects;
+                if (object && object instanceof fabric.Image) {
+                    object.left = position.x - object.width / 2;
+                    object.top = position.y - object.height / 2;
+                    this.canvas.renderAll();
+                }
+            }
+
+            if (isBrushSizeChanging && ['brush', 'eraser'].includes(tool?.type)) {
+                const xDiff = e.pointer.x - this.resizeBrushToolLatestX;
+                let onUpdateConfiguration = null;
+                if (this.isDrawing) {
+                    onUpdateConfiguration = this.drawData.onUpdateConfiguration;
+                } else if (this.isEditing) {
+                    onUpdateConfiguration = this.editData.onUpdateConfiguration;
+                }
+                if (onUpdateConfiguration) {
+                    onUpdateConfiguration({
+                        brushTool: {
+                            size: Math.trunc(Math.max(1, this.tool.size + xDiff)),
+                        },
+                    });
+                }
+
+                this.resizeBrushToolLatestX = e.pointer.x;
+                e.e.stopPropagation();
                 return;
             }
-            this.handleDrawMove(e.e, e.pointer);
+
+            if (this.brushMarker) {
+                this.brushMarker.left = position.x - tool.size / 2;
+                this.brushMarker.top = position.y - tool.size / 2;
+                this.canvas.bringToFront(this.brushMarker);
+                this.canvas.renderAll();
+            }
+
+            if (isMouseDown && !this.isHidden && !isBrushSizeChanging && ['brush', 'eraser'].includes(tool?.type)) {
+                const color = fabric.Color.fromHex(tool.color);
+                color.setAlpha(tool.type === 'eraser' ? 1 : 0.5);
+
+                const commonProperties = {
+                    selectable: false,
+                    evented: false,
+                    globalCompositeOperation: tool.type === 'eraser' ? 'destination-out' : 'xor',
+                };
+
+                const shapeProperties = {
+                    ...commonProperties,
+                    fill: color.toRgba(),
+                    left: position.x - tool.size / 2,
+                    top: position.y - tool.size / 2,
+                };
+
+                let shape: fabric.Circle | fabric.Rect | null = null;
+                if (tool.form === 'circle') {
+                    shape = new fabric.Circle({
+                        ...shapeProperties,
+                        radius: Math.round(tool.size / 2),
+                    });
+                } else if (tool.form === 'square') {
+                    shape = new fabric.Rect({
+                        ...shapeProperties,
+                        width: tool.size,
+                        height: tool.size,
+                    });
+                }
+
+                if (['brush', 'eraser'].includes(tool?.type)) {
+                    this.addDrawnObject(shape);
+                }
+
+                // add line to smooth the mask
+                if (this.latestMousePos.x !== -1 && this.latestMousePos.y !== -1) {
+                    const dx = position.x - this.latestMousePos.x;
+                    const dy = position.y - this.latestMousePos.y;
+                    if (Math.sqrt(dx ** 2 + dy ** 2) > tool.size / 2) {
+                        const line = new fabric.Line([
+                            this.latestMousePos.x - tool.size / 2,
+                            this.latestMousePos.y - tool.size / 2,
+                            position.x - tool.size / 2,
+                            position.y - tool.size / 2,
+                        ], {
+                            ...commonProperties,
+                            stroke: color.toRgba(),
+                            strokeWidth: tool.size,
+                            strokeLineCap: tool.form === 'circle' ? 'round' : 'square',
+                        });
+
+                        if (['brush', 'eraser'].includes(tool?.type)) {
+                            this.addDrawnObject(line);
+                        }
+                    }
+                }
+                this.canvas.renderAll();
+            } else if (tool?.type.startsWith('polygon-') && this.drawablePolygon) {
+                // update the polygon position
+                const points = this.drawablePolygon.get('points');
+                if (points.length) {
+                    points[points.length - 1].setX(e.e.offsetX);
+                    points[points.length - 1].setY(e.e.offsetY);
+                }
+                this.canvas.renderAll();
+            }
+
+            this.latestMousePos.x = position.x;
+            this.latestMousePos.y = position.y;
+            this.resizeBrushToolLatestX = position.x;
         });
     }
 
@@ -763,15 +606,20 @@ export class MasksHandlerImpl implements MasksHandler {
 
     public transform(geometry: Geometry): void {
         this.geometry = geometry;
-        const { image: { width, height }, scale } = geometry;
+        const {
+            scale, angle, image: { width, height }, top, left,
+        } = geometry;
 
+        const topCanvas = this.canvas.getElement().parentElement as HTMLDivElement;
         if (this.canvas.width !== width || this.canvas.height !== height) {
             this.canvas.setHeight(height);
             this.canvas.setWidth(width);
             this.canvas.setDimensions({ width, height });
         }
 
-        this.applyOverlayLayout();
+        topCanvas.style.top = `${top}px`;
+        topCanvas.style.left = `${left}px`;
+        topCanvas.style.transform = `scale(${scale}) rotate(${angle}deg)`;
 
         if (this.drawablePolygon) {
             this.drawablePolygon.set('strokeWidth', consts.BASE_STROKE_WIDTH / scale);
@@ -822,7 +670,7 @@ export class MasksHandlerImpl implements MasksHandler {
                 }
             }
 
-            this.showMaskOverlay();
+            this.canvas.getElement().parentElement.style.display = 'block';
             this.startTimestamp = Date.now();
         }
 
@@ -876,7 +724,7 @@ export class MasksHandlerImpl implements MasksHandler {
         if (editData.enabled && editData.state.shapeType === 'mask') {
             if (!this.isEditing) {
                 // start editing pipeline if not started yet
-                this.showMaskOverlay();
+                this.canvas.getElement().parentElement.style.display = 'block';
                 const { points } = editData.state;
                 const color = fabric.Color.fromHex(this.getStateColor(editData.state)).getSource();
                 const [left, top, right, bottom] = points.slice(-4);

@@ -446,6 +446,7 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
         wrapper.appendChild(canvasInstance.html());
 
         canvasInstance.configure({
+            nativeTouchInput: isTouchLayout(),
             undefinedAttrValue: config.UNDEFINED_ATTRIBUTE_VALUE,
             displayAllText: showObjectsTextAlways,
             autoborders: automaticBordering,
@@ -535,6 +536,7 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             prevProps.focusedObjectPadding !== focusedObjectPadding
         ) {
             canvasInstance.configure({
+                nativeTouchInput: isTouchLayout(),
                 undefinedAttrValue: config.UNDEFINED_ATTRIBUTE_VALUE,
                 displayAllText: showObjectsTextAlways,
                 autoborders: automaticBordering,

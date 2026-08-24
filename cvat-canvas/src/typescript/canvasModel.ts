@@ -80,6 +80,7 @@ export enum ColorBy {
 }
 
 export interface Configuration {
+    nativeTouchInput?: boolean;
     smoothImage?: boolean;
     autoborders?: boolean;
     snapToPoint?: boolean;
@@ -411,6 +412,7 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
                 width: 0,
             },
             configuration: {
+                nativeTouchInput: false,
                 smoothImage: true,
                 autoborders: false,
                 snapToPoint: false,
@@ -950,6 +952,9 @@ export class CanvasModelImpl extends MasterImpl implements CanvasModel {
     }
 
     public configure(configuration: Configuration): void {
+        if (typeof configuration.nativeTouchInput === 'boolean') {
+            this.data.configuration.nativeTouchInput = configuration.nativeTouchInput;
+        }
         if (typeof configuration.displayAllText === 'boolean') {
             this.data.configuration.displayAllText = configuration.displayAllText;
         }

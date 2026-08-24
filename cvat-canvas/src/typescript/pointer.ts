@@ -6,6 +6,7 @@ const DUPLICATE_MOUSE_MS = 1000;
 const DUPLICATE_MOUSE_PX = 16;
 const LONG_PRESS_MS = 500;
 const TAP_MOVE_PX = 10;
+const MAX_PENCIL_TOUCH_CONTACT_PX = 12;
 
 interface RecentPointer {
     t: number;
@@ -14,6 +15,7 @@ interface RecentPointer {
 }
 
 const recentPointers: RecentPointer[] = [];
+const disguisedPencilPointers = new Set<number>();
 
 export type PointerKind = 'mouse' | 'pen' | 'touch';
 
@@ -31,27 +33,56 @@ export function pointerTypeOf(event: Event): PointerKind | null {
 }
 
 function isLikelyPencilDisguisedAsTouch(event: PointerEvent): boolean {
-    // Some WebKit versions report Apple Pencil as touch with a ~0.5px contact ellipse.
+    // Some WebKit versions report Apple Pencil as touch. Its contact ellipse is
+    // small, but can be quantized above 1px (especially at non-1 viewport scale).
+    // A finger contact is substantially larger, so keep it on the gesture path.
     if (event.pointerType !== 'touch') {
         return false;
     }
-    if (event.width > 2 || event.height > 2) {
-        return false;
-    }
-    if ((typeof event.tiltX === 'number' && event.tiltX !== 0) ||
+    const stylusEvent = event as PointerEvent & {
+        azimuthAngle?: number;
+        altitudeAngle?: number;
+    };
+    const hasStylusAngles = (
+        (typeof event.tiltX === 'number' && event.tiltX !== 0) ||
         (typeof event.tiltY === 'number' && event.tiltY !== 0) ||
-        (typeof event.azimuthAngle === 'number' && event.azimuthAngle !== 0)
-    ) {
-        return true;
-    }
-    return event.width > 0 && event.width <= 1 && event.height > 0 && event.height <= 1;
+        (typeof stylusEvent.azimuthAngle === 'number' && stylusEvent.azimuthAngle !== 0) ||
+        (
+            typeof stylusEvent.altitudeAngle === 'number' &&
+            stylusEvent.altitudeAngle > 0 &&
+            stylusEvent.altitudeAngle < Math.PI / 2
+        )
+    );
+    // WebKit reports pressure=0.5 for ordinary touch when force is unavailable.
+    // Pencil pressure is variable, even when pointerType is incorrectly "touch".
+    const hasStylusPressure = event.pressure > 0 && Math.abs(event.pressure - 0.5) > 0.01;
+    const hasSmallContact = (
+        event.width > 0 &&
+        event.height > 0 &&
+        event.width <= MAX_PENCIL_TOUCH_CONTACT_PX &&
+        event.height <= MAX_PENCIL_TOUCH_CONTACT_PX
+    );
+    return hasStylusAngles || hasStylusPressure || hasSmallContact;
 }
 
 export function isPenPointer(event: Event): boolean {
     if (!isPointerEvent(event)) {
         return false;
     }
-    return event.pointerType === 'pen' || isLikelyPencilDisguisedAsTouch(event);
+    if (event.pointerType === 'pen') {
+        return true;
+    }
+    if (disguisedPencilPointers.has(event.pointerId)) {
+        if (event.type === 'pointerup' || event.type === 'pointercancel') {
+            window.setTimeout(() => disguisedPencilPointers.delete(event.pointerId), 0);
+        }
+        return true;
+    }
+    if (isLikelyPencilDisguisedAsTouch(event)) {
+        disguisedPencilPointers.add(event.pointerId);
+        return true;
+    }
+    return false;
 }
 
 export function isTouchPointer(event: Event): boolean {
@@ -109,7 +140,7 @@ export function penPressure(event: Event, fallback = 1): number {
     if (!isPenPointer(event)) {
         return fallback;
     }
-    const pressure = (event as PointerEvent).pressure;
+    const { pressure } = (event as PointerEvent);
     if (typeof pressure !== 'number' || pressure <= 0) {
         return fallback;
     }
@@ -127,6 +158,143 @@ export interface PointerGestureCallbacks {
     pinch(clientX: number, clientY: number, deltaY: number): void;
     tap(clientX: number, clientY: number): void;
     longPress(clientX: number, clientY: number): void;
+}
+
+export type CanvasPointerKind = 'pen' | 'finger';
+export type CanvasPointerPhase = 'down' | 'move' | 'up' | 'cancel';
+
+export interface NormalizedCanvasPointer {
+    kind: CanvasPointerKind;
+    phase: CanvasPointerPhase;
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+    canvasX: number;
+    canvasY: number;
+    pressure: number;
+    button: number;
+    buttons: number;
+    altKey: boolean;
+    ctrlKey: boolean;
+    shiftKey: boolean;
+    raw: PointerEvent;
+}
+
+export interface CanvasPointerRouterCallbacks extends PointerGestureCallbacks {
+    drawPointer(event: NormalizedCanvasPointer): boolean;
+}
+
+/**
+ * Sole pointer owner for native touch input. Mouse stays on the legacy lane.
+ * Finger navigation and Pencil drawing cannot both consume the same pointer.
+ */
+export class CanvasPointerRouter {
+    private gestures: PointerGestureSession;
+    private callbacks: CanvasPointerRouterCallbacks;
+    private pointerKinds = new Map<number, CanvasPointerKind>();
+    private ignoredPointers = new Set<number>();
+    private activePenPointerId: number | null = null;
+
+    constructor(callbacks: CanvasPointerRouterCallbacks) {
+        this.callbacks = callbacks;
+        // eslint-disable-next-line no-use-before-define
+        this.gestures = new PointerGestureSession(callbacks);
+    }
+
+    public handle(
+        phase: CanvasPointerPhase,
+        event: PointerEvent,
+        canvasX: number,
+        canvasY: number,
+    ): boolean {
+        if (event.pointerType === 'mouse') {
+            return false;
+        }
+        rememberPointer(event);
+
+        if (phase === 'down') {
+            const kind = isPenPointer(event) ? 'pen' : 'finger';
+            if (kind === 'finger' && this.activePenPointerId !== null) {
+                this.ignoredPointers.add(event.pointerId);
+                event.preventDefault();
+                return true;
+            }
+            this.pointerKinds.set(event.pointerId, kind);
+            if (kind === 'pen') {
+                for (const [pointerID, pointerKind] of this.pointerKinds) {
+                    if (pointerKind === 'finger') {
+                        this.pointerKinds.delete(pointerID);
+                        this.ignoredPointers.add(pointerID);
+                    }
+                }
+                this.gestures.destroy();
+                // eslint-disable-next-line no-use-before-define
+                this.gestures = new PointerGestureSession(this.callbacks);
+                this.activePenPointerId = event.pointerId;
+            }
+        }
+        if (this.ignoredPointers.has(event.pointerId)) {
+            event.preventDefault();
+            if (phase === 'up' || phase === 'cancel') {
+                this.ignoredPointers.delete(event.pointerId);
+            }
+            return true;
+        }
+        const kind = this.pointerKinds.get(event.pointerId);
+        if (!kind) {
+            return false;
+        }
+
+        if (kind === 'pen') {
+            const consumed = this.callbacks.drawPointer({
+                kind,
+                phase,
+                pointerId: event.pointerId,
+                clientX: event.clientX,
+                clientY: event.clientY,
+                canvasX,
+                canvasY,
+                pressure: penPressure(event, 1),
+                button: event.button,
+                buttons: event.buttons,
+                altKey: event.altKey,
+                ctrlKey: event.ctrlKey,
+                shiftKey: event.shiftKey,
+                raw: event,
+            });
+            if (consumed) {
+                event.preventDefault();
+            } else if (phase === 'down') {
+                this.gestures.onPointerDown(event);
+            } else if (phase === 'move') {
+                this.gestures.onPointerMove(event);
+            } else {
+                this.gestures.onPointerUp(event);
+            }
+        } else if (phase === 'down') {
+            this.gestures.onPointerDown(event);
+        } else if (phase === 'move') {
+            this.gestures.onPointerMove(event);
+        } else {
+            this.gestures.onPointerUp(event);
+        }
+
+        if (phase === 'up' || phase === 'cancel') {
+            this.pointerKinds.delete(event.pointerId);
+            disguisedPencilPointers.delete(event.pointerId);
+            if (this.activePenPointerId === event.pointerId) {
+                this.activePenPointerId = null;
+            }
+        }
+        return true;
+    }
+
+    public destroy(): void {
+        this.gestures.destroy();
+        this.pointerKinds.clear();
+        this.ignoredPointers.clear();
+        this.activePenPointerId = null;
+    }
 }
 
 /**
@@ -257,7 +425,6 @@ export class PointerGestureSession {
 
         if (this.touches.size === 0) {
             const wasLongPress = this.longPressFired;
-            const wasTap = !this.moved && !wasLongPress && !this.panning === false;
             this.clearLongPress();
             if (this.panning) {
                 this.callbacks.panEnd();
@@ -268,7 +435,6 @@ export class PointerGestureSession {
             }
             this.moved = false;
             this.pinchDistance = 0;
-            void wasTap;
             return true;
         }
 
@@ -289,6 +455,9 @@ export class PointerGestureSession {
         this.touches.clear();
         this.penDown = false;
         this.penPointerId = null;
+        if (this.panning) {
+            this.callbacks.panEnd();
+        }
         this.panning = false;
     }
 

@@ -16,6 +16,8 @@ import { CanvasController } from './canvasController';
 import { Listener, Master } from './master';
 import { DrawHandler, DrawHandlerImpl } from './drawHandler';
 import { MasksHandler, MasksHandlerImpl } from './masksHandler';
+import { NativeTouchDrawHandler } from './nativeTouchDrawHandler';
+import { NativeTouchMasksHandler } from './nativeTouchMasksHandler';
 import { EditHandler, EditHandlerImpl } from './editHandler';
 import { MergeHandler, MergeHandlerImpl } from './mergeHandler';
 import { SplitHandler, SplitHandlerImpl } from './splitHandler';
@@ -38,13 +40,13 @@ import {
     applySnapToShapePoint, isPolygonSelfIntersecting,
 } from './shared';
 import {
-    isDuplicateMouseEvent, isPenPointer, PointerGestureSession,
+    CanvasPointerRouter, isDuplicateMouseEvent, NormalizedCanvasPointer,
 } from './pointer';
 import {
     CanvasModel, Geometry, UpdateReasons, FrameZoom, ActiveElement,
     DrawData, MergeData, SplitData, Mode, Size, Configuration,
     InteractionResult, InteractionData, ColorBy, HighlightedElements,
-    HighlightSeverity, GroupData, JoinData, CanvasHint,
+    HighlightSeverity, GroupData, JoinData, CanvasHint, MasksEditData,
 } from './canvasModel';
 
 export interface CanvasView {
@@ -81,6 +83,8 @@ export class CanvasViewImpl implements CanvasView, Listener {
     private geometry: Geometry;
     private drawHandler: DrawHandler;
     private masksHandler: MasksHandler;
+    private nativeDrawHandler: NativeTouchDrawHandler;
+    private nativeMasksHandler: NativeTouchMasksHandler;
     private editHandler: EditHandler;
     private mergeHandler: MergeHandler;
     private splitHandler: SplitHandler;
@@ -99,7 +103,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
     private resizableShape: SVG.Shape | null;
     private skeletonResizerRefreshRequest: number | null;
     private ctrlPressed: boolean;
-    private pointerGestures: PointerGestureSession | null;
+    private nativePointerRouter: CanvasPointerRouter | null;
     private innerObjectsFlags: {
         drawHidden: Record<number, boolean>;
         editHidden: Record<number, boolean>;
@@ -645,7 +649,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
         Promise.all(objects.map((state) => {
             const [curLeft, , curRight] = state.points.slice(-4, -1);
             const image = new ImageData(
-                RLEToImageData(255, 255, 255, state.points), curRight - curLeft + 1,
+                new Uint8ClampedArray(RLEToImageData(255, 255, 255, state.points)), curRight - curLeft + 1,
             );
             return createImageBitmap(image);
         })).then((results) => {
@@ -796,6 +800,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
         // Transform handlers
         this.drawHandler.transform(this.geometry);
         this.masksHandler.transform(this.geometry);
+        this.nativeMasksHandler.updateGeometry(this.geometry);
         this.editHandler.transform(this.geometry);
         this.zoomHandler.transform(this.geometry);
         this.autoborderHandler.transform(this.geometry);
@@ -1940,30 +1945,46 @@ export class CanvasViewImpl implements CanvasView, Listener {
         }
     };
 
-    private onPointerDown = (event: PointerEvent): void => {
-        this.pointerGestures?.onPointerDown(event);
-        try {
-            if (event.pointerType === 'touch' && !isPenPointer(event)) {
+    private onNativePointer = (phase: 'down' | 'move' | 'up' | 'cancel') => (event: PointerEvent): void => {
+        if (!this.configuration.nativeTouchInput || !this.nativePointerRouter) {
+            return;
+        }
+        const [canvasX, canvasY] = translateToSVG(this.content, [event.clientX, event.clientY]);
+        if (!this.nativePointerRouter.handle(phase, event, canvasX, canvasY)) {
+            return;
+        }
+
+        event.stopPropagation();
+        if (phase === 'down') {
+            try {
                 this.canvas.setPointerCapture(event.pointerId);
-            } else if (isPenPointer(event)) {
-                const target = event.target as Node | null;
-                if (target && (this.content === target || this.content.contains(target))) {
-                    this.content.setPointerCapture(event.pointerId);
-                }
+            } catch (_error) {
+                // Pointer capture is optional on old WebKit SVG hosts.
             }
-        } catch (_error) {
-            // setPointerCapture is not available on some SVG hosts
+        } else if ((phase === 'up' || phase === 'cancel') && this.canvas.hasPointerCapture(event.pointerId)) {
+            this.canvas.releasePointerCapture(event.pointerId);
         }
     };
 
-    private onPointerMove = (event: PointerEvent): void => {
-        this.pointerGestures?.onPointerMove(event);
-    };
+    private handleNativeDrawPointer(_event: NormalizedCanvasPointer): boolean {
+        if (![Mode.DRAW, Mode.EDIT].includes(this.mode)) {
+            return false;
+        }
+        if (this.nativeMasksHandler.enabled) {
+            this.nativeMasksHandler.handlePointer(_event);
+            return true;
+        }
+        if (this.nativeDrawHandler.enabled) {
+            this.nativeDrawHandler.handlePointer(_event);
+            return true;
+        }
+        return false;
+    }
 
-    private onPointerUp = (event: PointerEvent): void => {
-        this.pointerGestures?.onPointerUp(event);
-        if (event.pointerType === 'touch') {
-            this.controller.disableDrag();
+    private suppressNativeCompatibilityMouse = (event: MouseEvent): void => {
+        if (this.configuration.nativeTouchInput && isDuplicateMouseEvent(event)) {
+            event.preventDefault();
+            event.stopPropagation();
         }
     };
 
@@ -2010,7 +2031,6 @@ export class CanvasViewImpl implements CanvasView, Listener {
         this.mode = Mode.IDLE;
         this.snapToAngleResize = consts.SNAP_TO_ANGLE_RESIZE_DEFAULT;
         this.ctrlPressed = false;
-        this.pointerGestures = null;
         this.innerObjectsFlags = {
             drawHidden: {},
             editHidden: {},
@@ -2135,6 +2155,29 @@ export class CanvasViewImpl implements CanvasView, Listener {
             this.drawHandler,
             this.masksContent,
         );
+        this.nativeDrawHandler = new NativeTouchDrawHandler(
+            this.onDrawDone,
+            this.adoptedContent,
+            this.configuration,
+        );
+        this.nativeMasksHandler = new NativeTouchMasksHandler(
+            this.onDrawDone,
+            this.canvas,
+            this.configuration,
+        );
+        this.nativeMasksHandler.setPolygonDelegate((tool, drawData, geometry): void => {
+            this.nativeDrawHandler.draw({
+                ...drawData,
+                shapeType: 'polygon',
+                brushTool: undefined,
+                initialState: undefined,
+                onDrawDone: (result: { points?: number[] }): void => {
+                    if (result?.points) {
+                        this.nativeMasksHandler.applyPolygon(result.points, tool === 'polygon-minus');
+                    }
+                },
+            }, geometry);
+        });
         this.editHandler = new EditHandlerImpl(this.onEditDone, this.adoptedContent, this.autoborderHandler);
         this.mergeHandler = new MergeHandlerImpl(
             this.onMergeDone,
@@ -2203,25 +2246,17 @@ export class CanvasViewImpl implements CanvasView, Listener {
             }
         });
 
-        this.pointerGestures = new PointerGestureSession({
-            panStart: (clientX, clientY) => {
-                this.controller.enableDrag(clientX, clientY);
-            },
-            panMove: (clientX, clientY) => {
-                this.controller.drag(clientX, clientY);
-            },
-            panEnd: () => {
-                this.controller.disableDrag();
-            },
+        this.nativePointerRouter = new CanvasPointerRouter({
+            panStart: (clientX, clientY) => this.controller.enableDrag(clientX, clientY),
+            panMove: (clientX, clientY) => this.controller.drag(clientX, clientY),
+            panEnd: () => this.controller.disableDrag(),
             pinch: (clientX, clientY, deltaY) => {
                 const { offset } = this.controller.geometry;
                 const point = translateToSVG(this.content, [clientX, clientY]);
                 this.controller.zoom(point[0] - offset, point[1] - offset, clamp(deltaY, -8, 8));
                 this.dispatchZoomEvent();
             },
-            tap: (clientX, clientY) => {
-                this.dispatchCursorMoved(clientX, clientY);
-            },
+            tap: (clientX, clientY) => this.dispatchCursorMoved(clientX, clientY),
             longPress: (clientX, clientY) => {
                 this.canvas.dispatchEvent(new MouseEvent('contextmenu', {
                     bubbles: true,
@@ -2231,16 +2266,24 @@ export class CanvasViewImpl implements CanvasView, Listener {
                     view: window,
                 }));
             },
+            drawPointer: (event) => this.handleNativeDrawPointer(event),
         });
 
-        this.canvas.addEventListener('pointerdown', this.onPointerDown, { passive: false });
-        this.canvas.addEventListener('pointermove', this.onPointerMove, { passive: false });
-        this.canvas.addEventListener('pointerup', this.onPointerUp);
-        this.canvas.addEventListener('pointercancel', this.onPointerUp);
-        this.canvas.addEventListener('lostpointercapture', this.onPointerUp);
-
+        this.canvas.addEventListener('pointerdown', this.onNativePointer('down'), { capture: true, passive: false });
+        this.canvas.addEventListener('pointermove', this.onNativePointer('move'), { capture: true, passive: false });
+        this.canvas.addEventListener('pointerup', this.onNativePointer('up'), { capture: true, passive: false });
+        this.canvas.addEventListener('pointercancel', this.onNativePointer('cancel'), { capture: true, passive: false });
+        this.canvas.addEventListener('lostpointercapture', this.onNativePointer('cancel'), {
+            capture: true,
+            passive: false,
+        });
+        for (const eventName of ['mousedown', 'mouseup', 'click', 'dblclick', 'contextmenu']) {
+            this.canvas.addEventListener(eventName, this.suppressNativeCompatibilityMouse, {
+                capture: true,
+                passive: false,
+            });
+        }
         window.document.addEventListener('mouseup', this.onMouseUp);
-        window.document.addEventListener('pointerup', this.onPointerUp);
         window.document.addEventListener('keydown', this.onKeyDown);
         window.document.addEventListener('keyup', this.onKeyUp);
 
@@ -2401,6 +2444,8 @@ export class CanvasViewImpl implements CanvasView, Listener {
             this.editHandler.configure(this.configuration);
             this.drawHandler.configure(this.configuration);
             this.masksHandler.configure(this.configuration);
+            this.nativeDrawHandler.configure(this.configuration);
+            this.nativeMasksHandler.configure(this.configuration);
             this.autoborderHandler.configure(this.configuration);
             this.interactionHandler.configure(this.configuration);
             this.sliceHandler.configure(this.configuration);
@@ -2575,7 +2620,18 @@ export class CanvasViewImpl implements CanvasView, Listener {
         } else if (reason === UpdateReasons.DRAW) {
             const data: DrawData = this.controller.drawData;
             if (data.enabled && [Mode.IDLE, Mode.DRAW].includes(this.mode)) {
-                if (data.shapeType !== 'mask') {
+                if (this.configuration.nativeTouchInput && data.shapeType === 'mask') {
+                    if (
+                        this.nativeDrawHandler.enabled &&
+                        data.brushTool &&
+                        ['brush', 'eraser'].includes(data.brushTool.type)
+                    ) {
+                        this.nativeDrawHandler.cancel();
+                    }
+                    this.nativeMasksHandler.draw(data, this.geometry);
+                } else if (this.configuration.nativeTouchInput) {
+                    this.nativeDrawHandler.draw(data, this.geometry);
+                } else if (data.shapeType !== 'mask') {
                     this.drawHandler.draw(data, this.geometry);
                 } else {
                     this.masksHandler.draw(data);
@@ -2601,7 +2657,14 @@ export class CanvasViewImpl implements CanvasView, Listener {
             } else if (this.mode !== Mode.IDLE) {
                 this.canvas.style.cursor = '';
                 this.mode = Mode.IDLE;
-                if (this.masksHandler.enabled) {
+                if (this.configuration.nativeTouchInput) {
+                    if (this.nativeDrawHandler.enabled) {
+                        this.nativeDrawHandler.draw(data, this.geometry);
+                    }
+                    if (this.nativeMasksHandler.enabled) {
+                        this.nativeMasksHandler.draw(data, this.geometry);
+                    }
+                } else if (this.masksHandler.enabled) {
                     this.masksHandler.draw(data);
                 } else {
                     this.drawHandler.draw(data, this.geometry);
@@ -2609,7 +2672,23 @@ export class CanvasViewImpl implements CanvasView, Listener {
             }
         } else if (reason === UpdateReasons.EDIT) {
             const data = this.controller.editData;
-            if (data.enabled && data.state.shapeType === 'mask') {
+            if (
+                this.configuration.nativeTouchInput &&
+                (data.state?.shapeType === 'mask' || this.nativeMasksHandler.enabled)
+            ) {
+                const maskEditData = data as MasksEditData;
+                if (data.enabled && !this.nativeMasksHandler.enabled) {
+                    this.onEditStart(data.state);
+                }
+                this.nativeMasksHandler.draw({
+                    enabled: data.enabled,
+                    shapeType: 'mask',
+                    initialState: data.state,
+                    redraw: data.state?.clientID,
+                    brushTool: maskEditData.brushTool,
+                    onUpdateConfiguration: maskEditData.onUpdateConfiguration,
+                }, this.geometry);
+            } else if (data.enabled && data.state.shapeType === 'mask') {
                 this.masksHandler.edit(data);
             } else if (this.masksHandler.enabled) {
                 this.masksHandler.edit(data);
@@ -2679,7 +2758,10 @@ export class CanvasViewImpl implements CanvasView, Listener {
             }
         } else if (reason === UpdateReasons.CANCEL) {
             if (this.mode === Mode.DRAW) {
-                if (this.masksHandler.enabled) {
+                if (this.configuration.nativeTouchInput) {
+                    this.nativeDrawHandler.cancel();
+                    this.nativeMasksHandler.cancel();
+                } else if (this.masksHandler.enabled) {
                     this.masksHandler.cancel();
                 } else {
                     this.drawHandler.cancel();
@@ -2697,7 +2779,9 @@ export class CanvasViewImpl implements CanvasView, Listener {
             } else if (this.mode === Mode.SELECT_REGION) {
                 this.regionSelector.cancel();
             } else if (this.mode === Mode.EDIT) {
-                if (this.masksHandler.enabled) {
+                if (this.configuration.nativeTouchInput && this.nativeMasksHandler.enabled) {
+                    this.nativeMasksHandler.cancel();
+                } else if (this.masksHandler.enabled) {
                     this.masksHandler.cancel();
                 } else {
                     this.editHandler.cancel();
@@ -2733,14 +2817,10 @@ export class CanvasViewImpl implements CanvasView, Listener {
             window.document.removeEventListener('keydown', this.onKeyDown);
             window.document.removeEventListener('keyup', this.onKeyUp);
             window.document.removeEventListener('mouseup', this.onMouseUp);
-            window.document.removeEventListener('pointerup', this.onPointerUp);
-            this.canvas.removeEventListener('pointerdown', this.onPointerDown);
-            this.canvas.removeEventListener('pointermove', this.onPointerMove);
-            this.canvas.removeEventListener('pointerup', this.onPointerUp);
-            this.canvas.removeEventListener('pointercancel', this.onPointerUp);
-            this.canvas.removeEventListener('lostpointercapture', this.onPointerUp);
-            this.pointerGestures?.destroy();
-            this.pointerGestures = null;
+            this.nativePointerRouter?.destroy();
+            this.nativePointerRouter = null;
+            this.nativeDrawHandler.destroy();
+            this.nativeMasksHandler.destroy();
             this.interactionHandler.destroy();
         }
 
@@ -2754,14 +2834,23 @@ export class CanvasViewImpl implements CanvasView, Listener {
     }
 
     public undo(): boolean {
+        if (this.configuration.nativeTouchInput && this.nativeMasksHandler.enabled) {
+            return this.nativeMasksHandler.undo();
+        }
         return this.masksHandler.undo();
     }
 
     public redo(): boolean {
+        if (this.configuration.nativeTouchInput && this.nativeMasksHandler.enabled) {
+            return this.nativeMasksHandler.redo();
+        }
         return this.masksHandler.redo();
     }
 
     public undoDrawPoint(): boolean {
+        if (this.configuration.nativeTouchInput && this.nativeDrawHandler.enabled) {
+            return this.nativeDrawHandler.undo();
+        }
         return this.drawHandler.undoLastPoint();
     }
 
