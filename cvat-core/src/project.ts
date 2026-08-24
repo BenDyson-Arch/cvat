@@ -3,7 +3,9 @@
 //
 // SPDX-License-Identifier: MIT
 
-import { DimensionType, ProjectStatus, StorageLocation } from './enums';
+import {
+    AnnotationProfile, DimensionType, ProjectStatus, RelatedImageMode, StorageLocation,
+} from './enums';
 import { Storage } from './storage';
 import { SerializedLabel, SerializedProject } from './server-response-types';
 import PluginRegistry from './plugins';
@@ -29,6 +31,8 @@ export default class Project {
     public readonly updatedDate: string;
     public readonly subsets: string[];
     public readonly dimension: DimensionType;
+    public readonly annotationProfile: AnnotationProfile | null;
+    public readonly relatedImageMode: RelatedImageMode;
     public readonly labels: Label[];
     public annotations: {
         exportDataset: (
@@ -64,6 +68,8 @@ export default class Project {
             updated_date: undefined,
             task_subsets: undefined,
             dimension: undefined,
+            annotation_profile: null,
+            related_image_mode: RelatedImageMode.CONTEXTUAL,
             source_storage: undefined,
             target_storage: undefined,
             labels: undefined,
@@ -155,6 +161,12 @@ export default class Project {
                 },
                 dimension: {
                     get: () => data.dimension,
+                },
+                annotationProfile: {
+                    get: () => data.annotation_profile,
+                },
+                relatedImageMode: {
+                    get: () => data.related_image_mode,
                 },
                 labels: {
                     get: () => [...data.labels],

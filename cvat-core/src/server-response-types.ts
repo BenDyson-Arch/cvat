@@ -4,7 +4,8 @@
 
 import {
     ChunkType,
-    DimensionType, JobStage, JobState, JobType, MediaType, ProjectStatus,
+    AnnotationProfile, DimensionType, JobStage, JobState, JobType, MediaType, ProjectStatus,
+    RelatedImageMode,
     ShapeType, StorageLocation, LabelType,
     ShareFileType, Source, TaskMode, TaskStatus,
     CloudStorageCredentialsType, CloudStorageProviderType,
@@ -75,6 +76,8 @@ export interface SerializedProject {
     tasks: { count: number; url: string; };
     task_subsets: string[];
     status: ProjectStatus;
+    annotation_profile: AnnotationProfile | null;
+    related_image_mode: RelatedImageMode;
 }
 
 export interface SerializedTask {
@@ -114,6 +117,8 @@ export interface SerializedTask {
     updated_date: string;
     url: string;
     consensus_enabled: boolean;
+    annotation_profile: AnnotationProfile | null;
+    related_image_mode: RelatedImageMode;
 }
 
 export interface SerializedJob {
@@ -145,6 +150,8 @@ export interface SerializedJob {
     target_storage: SerializedStorage | null;
     parent_job_id: number | null;
     replicas_count: number;
+    annotation_profile: AnnotationProfile | null;
+    related_image_mode: RelatedImageMode;
 }
 
 export type AttrInputType = 'select' | 'radio' | 'checkbox' | 'number' | 'text';
@@ -380,6 +387,7 @@ export interface SerializedFramesMetaData {
         height?: number;
         name: string;
         related_files: number;
+        related_file_paths: string[];
     }[];
     image_quality: number;
     size: number;

@@ -40,6 +40,7 @@ import {
     ShapeType, ObjectType, LabelType, ModelKind, ModelProviders,
     DimensionType, JobType, Source, MembershipRole,
     JobStage, JobState, RQStatus, StorageLocation, MediaType,
+    AnnotationProfile, RelatedImageMode,
 } from 'cvat-core/src/enums';
 import { Storage, StorageData } from 'cvat-core/src/storage';
 import Issue from 'cvat-core/src/issue';
@@ -110,6 +111,8 @@ export {
     ModelProviders,
     DimensionType,
     MediaType,
+    AnnotationProfile,
+    RelatedImageMode,
     AnnotationFormats,
     Dumper,
     Loader,

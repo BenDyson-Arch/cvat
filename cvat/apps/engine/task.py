@@ -21,6 +21,7 @@ import attrs
 import av
 import requests
 import rq
+from PIL import Image as PILImage
 from django.conf import settings
 from django.db import transaction
 from django.forms.models import model_to_dict
@@ -1487,6 +1488,22 @@ def _create_image_task_media_descriptors(
         is_backup_restore=is_backup_restore,
     )
 
+    if db_task.effective_related_image_mode == models.RelatedImageMode.ALIGNED:
+        for image in images:
+            for related_file_path in related_images.get(image.path, []):
+                absolute_path = upload_dir / related_file_path
+                if not absolute_path.is_file():
+                    raise ValidationError(
+                        f"Cannot validate aligned related image '{related_file_path}'"
+                    )
+                with PILImage.open(absolute_path) as related_image:
+                    if related_image.size != (image.width, image.height):
+                        raise ValidationError(
+                            f"Aligned related image '{related_file_path}' has size "
+                            f"{related_image.width}x{related_image.height}; expected "
+                            f"{image.width}x{image.height}"
+                        )
+
     images = db_utils.bulk_create(models.Image, images)
 
     db_related_files = [
@@ -1871,6 +1888,19 @@ def initialize_task(
     db_task.media_type = detected_media_type
     db_task.dimension = detected_dimension
     db_task.mode = detected_mode
+
+    if (
+        db_task.effective_annotation_profile
+        and db_task.dimension != models.DimensionType.DIM_2D
+    ):
+        raise ValidationError("Annotation profiles are supported only for 2D tasks")
+
+    if db_task.effective_related_image_mode == models.RelatedImageMode.ALIGNED and (
+        db_task.dimension != models.DimensionType.DIM_2D
+        or db_task.media_type != models.MediaType.IMAGE
+        or db_task.mode != models.TaskMode.ANNOTATION
+    ):
+        raise ValidationError("Aligned related images are supported only for 2D image tasks")
 
     if db_task.dimension == models.DimensionType.DIM_3D:
         extractor.reconcile(

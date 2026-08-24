@@ -76,6 +76,8 @@ export default function implementProject(Project: typeof ProjectClass): typeof P
             const projectSpec: any = {
                 name: this.name,
                 labels: this.labels.map((el) => el.toJSON()),
+                annotation_profile: this.annotationProfile,
+                related_image_mode: this.relatedImageMode,
             };
 
             if (this.bugTracker) {

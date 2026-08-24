@@ -228,6 +228,8 @@ class _TaskBackupBase(_BackupBase):
             "status",
             "subset",
             "labels",
+            "annotation_profile",
+            "related_image_mode",
         }
 
         return self._prepare_meta(allowed_fields, task)
@@ -1295,6 +1297,8 @@ class _ProjectBackupBase(_BackupBase):
             "labels",
             "name",
             "status",
+            "annotation_profile",
+            "related_image_mode",
         }
 
         return self._prepare_meta(allowed_fields, project)

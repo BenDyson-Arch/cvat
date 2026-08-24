@@ -46,6 +46,19 @@ export enum DimensionType {
     DIMENSION_3D = '3d',
 }
 
+export enum AnnotationProfile {
+    CLASSIFICATION = 'classification',
+    OBJECT_DETECTION = 'object_detection',
+    INSTANCE_SEGMENTATION = 'instance_segmentation',
+    SEMANTIC_SEGMENTATION = 'semantic_segmentation',
+    KEYPOINTS = 'keypoints',
+}
+
+export enum RelatedImageMode {
+    CONTEXTUAL = 'contextual',
+    ALIGNED = 'aligned',
+}
+
 export enum RQStatus {
     QUEUED = 'queued',
     STARTED = 'started',

@@ -14,9 +14,12 @@ import Form, { FormInstance } from 'antd/lib/form';
 import Collapse from 'antd/lib/collapse';
 import Button from 'antd/lib/button';
 import Input from 'antd/lib/input';
+import Select from 'antd/lib/select';
 import notification from 'antd/lib/notification';
 import { createProjectAsync } from 'actions/projects-actions';
-import { Storage, StorageData, StorageLocation } from 'cvat-core-wrapper';
+import {
+    AnnotationProfile, RelatedImageMode, Storage, StorageData, StorageLocation,
+} from 'cvat-core-wrapper';
 import patterns from 'utils/validation-patterns';
 import LabelsEditor from 'components/labels-editor/labels-editor';
 import SourceStorageField from 'components/storage/source-storage-field';
@@ -126,6 +129,8 @@ function AdvancedConfigurationForm(props: AdvancedConfigurationProps): JSX.Eleme
 
 export default function CreateProjectContent(): JSX.Element {
     const [projectLabels, setProjectLabels] = useState<any[]>([]);
+    const [annotationProfile, setAnnotationProfile] = useState<AnnotationProfile | null>(null);
+    const [relatedImageMode, setRelatedImageMode] = useState<RelatedImageMode>(RelatedImageMode.CONTEXTUAL);
     const [sourceStorageLocation, setSourceStorageLocation] = useState(StorageLocation.LOCAL);
     const [targetStorageLocation, setTargetStorageLocation] = useState(StorageLocation.LOCAL);
     const nameFormRef = useRef<FormInstance>(null);
@@ -138,6 +143,8 @@ export default function CreateProjectContent(): JSX.Element {
         if (nameFormRef.current) nameFormRef.current.resetFields();
         if (advancedFormRef.current) advancedFormRef.current.resetFields();
         setProjectLabels([]);
+        setAnnotationProfile(null);
+        setRelatedImageMode(RelatedImageMode.CONTEXTUAL);
         setSourceStorageLocation(StorageLocation.LOCAL);
         setTargetStorageLocation(StorageLocation.LOCAL);
     };
@@ -157,6 +164,8 @@ export default function CreateProjectContent(): JSX.Element {
                     ...projectData,
                     ...advancedValues,
                     name: basicValues.name,
+                    annotation_profile: annotationProfile,
+                    related_image_mode: relatedImageMode,
                     source_storage: new Storage(
                         advancedValues.sourceStorage || { location: StorageLocation.LOCAL },
                     ).toJSON(),
@@ -202,6 +211,35 @@ export default function CreateProjectContent(): JSX.Element {
         <Row justify='start' align='middle' className='cvat-create-project-content'>
             <Col span={24}>
                 <NameConfigurationForm formRef={nameFormRef} inputRef={nameInputRef} />
+            </Col>
+            <Col span={24}>
+                <Text className='cvat-text-color'>Annotation workflow:</Text>
+                <Select
+                    allowClear
+                    placeholder='Unrestricted (legacy behavior)'
+                    value={annotationProfile}
+                    onChange={(value: AnnotationProfile | undefined) => setAnnotationProfile(value || null)}
+                    options={[
+                        { value: AnnotationProfile.CLASSIFICATION, label: '2D classification' },
+                        { value: AnnotationProfile.OBJECT_DETECTION, label: '2D object detection' },
+                        { value: AnnotationProfile.INSTANCE_SEGMENTATION, label: '2D instance segmentation' },
+                        { value: AnnotationProfile.SEMANTIC_SEGMENTATION, label: '2D semantic segmentation' },
+                        { value: AnnotationProfile.KEYPOINTS, label: '2D keypoints' },
+                    ]}
+                    style={{ width: '100%' }}
+                />
+            </Col>
+            <Col span={24}>
+                <Text className='cvat-text-color'>Related images:</Text>
+                <Select
+                    value={relatedImageMode}
+                    onChange={setRelatedImageMode}
+                    options={[
+                        { value: RelatedImageMode.CONTEXTUAL, label: 'Contextual images' },
+                        { value: RelatedImageMode.ALIGNED, label: 'Aligned views (shared annotations)' },
+                    ]}
+                    style={{ width: '100%' }}
+                />
             </Col>
             <Col span={24}>
                 <Text className='cvat-text-color'>Labels:</Text>

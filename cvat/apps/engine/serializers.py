@@ -1038,6 +1038,12 @@ class JobReadSerializer(serializers.ModelSerializer):
     dimension = serializers.CharField(source="segment.task.dimension", read_only=True)
     mode = serializers.CharField(source="segment.task.mode", read_only=True)
     media_type = serializers.CharField(source="segment.task.media_type", read_only=True)
+    annotation_profile = serializers.CharField(
+        source="segment.task.effective_annotation_profile", allow_null=True, read_only=True
+    )
+    related_image_mode = serializers.CharField(
+        source="segment.task.effective_related_image_mode", read_only=True
+    )
 
     data_chunk_size = serializers.ReadOnlyField(source="segment.task.data.chunk_size")
     organization = serializers.ReadOnlyField(source="organization_id", allow_null=True)
@@ -1078,6 +1084,8 @@ class JobReadSerializer(serializers.ModelSerializer):
             "dimension",
             "mode",
             "media_type",
+            "annotation_profile",
+            "related_image_mode",
             "bug_tracker",
             "status",
             "stage",
@@ -2964,6 +2972,12 @@ class TaskReadSerializer(serializers.ModelSerializer):
     dimension = serializers.CharField(allow_blank=True, required=False, read_only=True)
     mode = serializers.CharField(allow_blank=True, required=False, read_only=True)
     media_type = serializers.CharField(allow_blank=True, required=False, read_only=True)
+    annotation_profile = serializers.CharField(
+        source="effective_annotation_profile", allow_null=True, read_only=True
+    )
+    related_image_mode = serializers.CharField(
+        source="effective_related_image_mode", read_only=True
+    )
 
     target_storage = StorageSerializer(required=False, allow_null=True)
     source_storage = StorageSerializer(required=False, allow_null=True)
@@ -3006,6 +3020,8 @@ class TaskReadSerializer(serializers.ModelSerializer):
             "dimension",
             "mode",
             "media_type",
+            "annotation_profile",
+            "related_image_mode",
             "subset",
             "organization_id",
             "organization",  # deprecated field
@@ -3100,9 +3116,17 @@ class TaskWriteSerializer(WriteOnceMixin, serializers.ModelSerializer, OrgTransf
             "target_storage",
             "source_storage",
             "consensus_replicas",
+            "annotation_profile",
+            "related_image_mode",
             "organization_id",
         )
-        write_once_fields = ("overlap", "segment_size", "consensus_replicas")
+        write_once_fields = (
+            "overlap",
+            "segment_size",
+            "consensus_replicas",
+            "annotation_profile",
+            "related_image_mode",
+        )
         update_only_fields = ("organization_id",)
 
     def __init__(self, *args, **kwargs):
@@ -3133,6 +3157,14 @@ class TaskWriteSerializer(WriteOnceMixin, serializers.ModelSerializer, OrgTransf
         project_id = validated_data.get("project_id")
         if validated_data.get("label_set") and project_id:
             raise serializers.ValidationError("Task must have only one of Label set or project_id")
+        if project_id and (
+            validated_data.get("annotation_profile") is not None
+            or validated_data.get("related_image_mode", models.RelatedImageMode.CONTEXTUAL)
+            != models.RelatedImageMode.CONTEXTUAL
+        ):
+            raise serializers.ValidationError(
+                "Tasks associated with a project inherit its annotation profile and related image mode"
+            )
 
         project = None
         if project_id:
@@ -3182,7 +3214,15 @@ class TaskWriteSerializer(WriteOnceMixin, serializers.ModelSerializer, OrgTransf
         validated_data: dict[str, Any],
         update_fields: list[str],
     ):
-        for field_name in ("name", "bug_tracker", "subset", "owner_id", "assignee_id"):
+        for field_name in (
+            "name",
+            "bug_tracker",
+            "subset",
+            "owner_id",
+            "assignee_id",
+            "annotation_profile",
+            "related_image_mode",
+        ):
             if field_name in validated_data and (
                 field_value := validated_data[field_name]
             ) != getattr(instance, field_name):
@@ -3442,6 +3482,8 @@ class ProjectReadSerializer(serializers.ModelSerializer):
             "updated_date",
             "status",
             "dimension",
+            "annotation_profile",
+            "related_image_mode",
             "organization",  # deprecated field
             "organization_id",
             "target_storage",
@@ -3485,6 +3527,8 @@ class ProjectWriteSerializer(serializers.ModelSerializer, OrgTransferableMixin):
             "owner_id",
             "assignee_id",
             "bug_tracker",
+            "annotation_profile",
+            "related_image_mode",
             "target_storage",
             "source_storage",
             "organization_id",
@@ -3505,6 +3549,16 @@ class ProjectWriteSerializer(serializers.ModelSerializer, OrgTransferableMixin):
     def validate(self, attrs):
         if self.instance and "organization_id" in attrs.keys():
             self._validate_org_transferring(attrs)
+
+        if self.instance and self.instance.tasks.exists():
+            for field_name in ("annotation_profile", "related_image_mode"):
+                if (
+                    field_name in attrs
+                    and attrs[field_name] != getattr(self.instance, field_name)
+                ):
+                    raise serializers.ValidationError(
+                        f"{field_name} cannot be changed after tasks have been added to the project"
+                    )
 
         return attrs
 
@@ -3544,7 +3598,14 @@ class ProjectWriteSerializer(serializers.ModelSerializer, OrgTransferableMixin):
         validated_data: dict[str, Any],
         update_fields: list[str],
     ):
-        for field_name in ("name", "bug_tracker", "owner_id", "assignee_id"):
+        for field_name in (
+            "name",
+            "bug_tracker",
+            "owner_id",
+            "assignee_id",
+            "annotation_profile",
+            "related_image_mode",
+        ):
             if field_name in validated_data and (
                 field_value := validated_data[field_name]
             ) != getattr(instance, field_name):
@@ -3635,6 +3696,11 @@ class FrameMetaSerializer(serializers.Serializer):
     height = serializers.IntegerField(required=False)
     name = serializers.CharField(max_length=MAX_FILENAME_LENGTH)
     related_files = serializers.IntegerField()
+    related_file_paths = serializers.ListField(
+        child=serializers.CharField(max_length=MAX_FILENAME_LENGTH),
+        required=False,
+        default=list,
+    )
 
     # for compatibility with version 2.3.0
     has_related_context = serializers.SerializerMethodField()

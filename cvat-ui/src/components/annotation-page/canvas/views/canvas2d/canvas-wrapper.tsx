@@ -136,6 +136,7 @@ interface StateToProps {
     imageFilters: ImageFilter[];
     activeControl: ActiveControl;
     activeObjectHidden: boolean;
+    activeViewIndex: number;
 }
 
 interface DispatchToProps {
@@ -178,6 +179,7 @@ function mapStateToProps(state: CombinedState): StateToProps {
             player: {
                 frame: { data: frameData, number: frame },
                 frameAngles,
+                activeViewIndex,
             },
             annotations: {
                 states: annotations,
@@ -284,6 +286,7 @@ function mapStateToProps(state: CombinedState): StateToProps {
         highlightedConflict,
         imageFilters,
         activeObjectHidden,
+        activeViewIndex,
     };
 }
 
@@ -511,6 +514,7 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             imageFilters,
             focusedObjectPadding,
             renderData,
+            activeViewIndex,
         } = this.props;
         const { canvasInstance } = this.props as { canvasInstance: Canvas };
 
@@ -620,7 +624,8 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             prevProps.annotations !== annotations ||
             prevProps.frameData !== frameData ||
             prevProps.hiddenZLayers !== hiddenZLayers ||
-            prevProps.renderData !== renderData
+            prevProps.renderData !== renderData ||
+            prevProps.activeViewIndex !== activeViewIndex
         ) {
             this.updateCanvas();
         } else if (prevProps.imageFilters !== imageFilters) {
@@ -1027,6 +1032,7 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
         const {
             hiddenZLayers, annotations, frameData,
             workspace, frame, imageFilters, renderData,
+            activeViewIndex, jobInstance,
         } = this.props;
 
         const { canvasInstance } = this.props as { canvasInstance: Canvas };
@@ -1040,6 +1046,18 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
                 get: (_frameData, prop, receiver) => {
                     if (prop === 'data') {
                         return async (...args: any[]) => {
+                            if (activeViewIndex > 0) {
+                                const contextImages = await jobInstance.frames.contextImage(frame);
+                                const key = Object.keys(contextImages).sort()[activeViewIndex - 1];
+                                const imageData = contextImages[key];
+                                if (imageData) {
+                                    return {
+                                        renderWidth: imageData.width,
+                                        renderHeight: imageData.height,
+                                        imageData,
+                                    };
+                                }
+                            }
                             const originalImage = await _frameData.data(...args);
                             const imageIsNotProcessed = imageFilters.some((imageFilter: ImageFilter) => (
                                 imageFilter.modifier.currentProcessedImage !== frame

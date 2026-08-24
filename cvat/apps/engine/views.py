@@ -1937,7 +1937,10 @@ class TaskViewSet(
                             "data__images",
                             queryset=models.Image.objects.order_by("frame"),
                         ),
-                        "data__images__related_files",
+                        Prefetch(
+                            "data__images__related_files",
+                            queryset=models.RelatedFile.objects.order_by("path"),
+                        ),
                     ]
                 case ("", ""):
                     pass  # noop, nothing to load
@@ -2003,6 +2006,11 @@ class TaskViewSet(
                 "name": item.path,
                 "related_files": (
                     item.related_files.count() if hasattr(item, "related_files") else 0
+                ),
+                "related_file_paths": (
+                    [related.path for related in item.related_files.all()]
+                    if hasattr(item, "related_files")
+                    else []
                 ),
                 **serialize_media_item(item),
             }
@@ -2672,7 +2680,10 @@ class JobViewSet(
                             "segment__task__data__images",
                             queryset=models.Image.objects.order_by("frame"),
                         ),
-                        "segment__task__data__images__related_files",
+                        Prefetch(
+                            "segment__task__data__images__related_files",
+                            queryset=models.RelatedFile.objects.order_by("path"),
+                        ),
                     ]
                 case ("", ""):
                     pass  # noop, nothing to load
@@ -2774,6 +2785,11 @@ class JobViewSet(
                 "name": item.path,
                 "related_files": (
                     item.related_files.count() if hasattr(item, "related_files") else 0
+                ),
+                "related_file_paths": (
+                    [related.path for related in item.related_files.all()]
+                    if hasattr(item, "related_files")
+                    else []
                 ),
                 **serialize_media_item(item),
             }

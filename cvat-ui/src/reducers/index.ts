@@ -934,6 +934,7 @@ export interface AnnotationState {
         navigationType: NavigationType;
         ranges: string;
         navigationBlocked: boolean;
+        activeViewIndex: number;
         playing: boolean;
         frameAngles: number[];
         hoveredChapter: number | null;

@@ -115,6 +115,7 @@ export class FramesMetaData {
         height: number;
         name: string;
         related_files: number;
+        related_file_paths: string[];
     }[];
     public imageQuality: number;
     public size: number;
@@ -344,6 +345,7 @@ export class FrameData {
     public readonly height: number;
     public readonly number: number;
     public readonly relatedFiles: number;
+    public readonly relatedFilePaths: string[];
     public readonly deleted: boolean;
     public readonly jobID: number;
 
@@ -355,6 +357,7 @@ export class FrameData {
         frameNumber,
         deleted,
         related_files: relatedFiles,
+        related_file_paths: relatedFilePaths = [],
     }) {
         Object.defineProperties(
             this,
@@ -381,6 +384,10 @@ export class FrameData {
                 },
                 relatedFiles: {
                     value: relatedFiles,
+                    writable: false,
+                },
+                relatedFilePaths: {
+                    value: [...relatedFilePaths],
                     writable: false,
                 },
                 deleted: {
@@ -994,6 +1001,7 @@ export async function getFrame(
         height: frameMeta.height,
         name: frameMeta.name,
         related_files: frameMeta.related_files,
+        related_file_paths: frameMeta.related_file_paths,
         frameNumber: frame,
         deleted: frame in meta.deletedFrames,
         jobID,

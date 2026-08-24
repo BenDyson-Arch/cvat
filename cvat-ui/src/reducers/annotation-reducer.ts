@@ -12,7 +12,8 @@ import { BoundariesActionTypes } from 'actions/boundaries-actions';
 import { Canvas, CanvasMode, RenderData } from 'cvat-canvas-wrapper';
 import { Canvas3d } from 'cvat-canvas3d-wrapper';
 import {
-    DimensionType, getCore, JobStage, Label, LabelType, ObjectState, ObjectType, ShapeType,
+    AnnotationProfile, DimensionType, getCore, JobStage, Label, LabelType,
+    ObjectState, ObjectType, ShapeType,
 } from 'cvat-core-wrapper';
 import {
     ActiveControl,
@@ -122,6 +123,7 @@ const defaultState: AnnotationState = {
             changeFrameEvent: null,
         },
         navigationType: NavigationType.REGULAR,
+        activeViewIndex: 0,
         ranges: '',
         playing: false,
         frameAngles: [],
@@ -233,7 +235,19 @@ export default (state = defaultState, action: AnyAction): AnnotationState => {
             let workspaceSelected = null;
             let activeObjectType;
             let activeShapeType = null;
-            if (defaultLabel?.type === LabelType.TAG) {
+            if (job.annotationProfile === AnnotationProfile.CLASSIFICATION) {
+                activeObjectType = ObjectType.TAG;
+            } else if (job.annotationProfile) {
+                activeShapeType = {
+                    [AnnotationProfile.OBJECT_DETECTION]: ShapeType.RECTANGLE,
+                    [AnnotationProfile.INSTANCE_SEGMENTATION]: ShapeType.POLYGON,
+                    [AnnotationProfile.SEMANTIC_SEGMENTATION]: ShapeType.MASK,
+                    [AnnotationProfile.KEYPOINTS]: ShapeType.POINTS,
+                }[job.annotationProfile as Exclude<AnnotationProfile, AnnotationProfile.CLASSIFICATION>];
+                activeObjectType = job.mode === 'interpolation' &&
+                    job.annotationProfile !== AnnotationProfile.SEMANTIC_SEGMENTATION ?
+                    ObjectType.TRACK : ObjectType.SHAPE;
+            } else if (defaultLabel?.type === LabelType.TAG) {
                 activeObjectType = ObjectType.TAG;
             } else {
                 activeShapeType = labelShapeType(defaultLabel);
@@ -309,6 +323,7 @@ export default (state = defaultState, action: AnyAction): AnnotationState => {
                         data,
                     },
                     frameAngles: Array(job.stopFrame - job.startFrame + 1).fill(0),
+                    activeViewIndex: 0,
                 },
                 drawing: {
                     ...state.drawing,
@@ -405,6 +420,8 @@ export default (state = defaultState, action: AnyAction): AnnotationState => {
                 ...state,
                 player: {
                     ...state.player,
+                    activeViewIndex: state.player.activeViewIndex <= relatedFiles ?
+                        state.player.activeViewIndex : 0,
                     frame: {
                         data,
                         filename,
@@ -460,6 +477,15 @@ export default (state = defaultState, action: AnyAction): AnnotationState => {
                         }
                         return _angle;
                     }),
+                },
+            };
+        }
+        case AnnotationActionTypes.SET_ACTIVE_VIEW: {
+            return {
+                ...state,
+                player: {
+                    ...state.player,
+                    activeViewIndex: action.payload.activeViewIndex,
                 },
             };
         }

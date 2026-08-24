@@ -11,7 +11,7 @@ import {
 } from 'reducers';
 import GlobalHotKeys, { KeyMap } from 'utils/mousetrap-react';
 import { Canvas, CanvasMode } from 'cvat-canvas-wrapper';
-import { LabelType } from 'cvat-core-wrapper';
+import { AnnotationProfile } from 'cvat-core-wrapper';
 
 import { ShortcutScope } from 'utils/enums';
 import { registerComponentShortcuts } from 'actions/shortcuts-actions';
@@ -41,6 +41,7 @@ import GroupControl, { Props as GroupControlProps } from './group-control';
 import JoinControl, { Props as JoinControlProps } from './join-control';
 import SplitControl, { Props as SplitControlProps } from './split-control';
 import SliceControl, { Props as SliceControlProps } from './slice-control';
+import { visibleShapesFromLabels } from '../../touch-chrome/visible-shapes';
 
 type Label = CombinedState['annotation']['job']['labels'][0];
 
@@ -51,6 +52,7 @@ interface Props {
     normalizedKeyMap: Record<string, string>;
     labels: Label[];
     frameData: any;
+    annotationProfile: AnnotationProfile | null;
 
     updateActiveControl(activeControl: ActiveControl): void;
     rotateFrame(rotation: Rotation): void;
@@ -161,29 +163,22 @@ export default function ControlsSideBarComponent(props: Props): JSX.Element {
         redrawShape,
         frameData,
         hotkeysOnly,
+        annotationProfile,
     } = props;
 
     const controlsDisabled = !labels.length || frameData.deleted;
-    const withUnspecifiedType = labels.some((label: any) => label.type === 'any' && !label.hasParent);
-    let rectangleControlVisible = withUnspecifiedType;
-    let polygonControlVisible = withUnspecifiedType;
-    let polylineControlVisible = withUnspecifiedType;
-    let pointsControlVisible = withUnspecifiedType;
-    let ellipseControlVisible = withUnspecifiedType;
-    let cuboidControlVisible = withUnspecifiedType;
-    let maskControlVisible = withUnspecifiedType;
-    let tagControlVisible = withUnspecifiedType;
-    const skeletonControlVisible = labels.some((label: Label) => label.type === 'skeleton');
-    labels.forEach((label: Label) => {
-        rectangleControlVisible = rectangleControlVisible || label.type === LabelType.RECTANGLE;
-        polygonControlVisible = polygonControlVisible || label.type === LabelType.POLYGON;
-        polylineControlVisible = polylineControlVisible || label.type === LabelType.POLYLINE;
-        pointsControlVisible = pointsControlVisible || label.type === LabelType.POINTS;
-        ellipseControlVisible = ellipseControlVisible || label.type === LabelType.ELLIPSE;
-        cuboidControlVisible = cuboidControlVisible || label.type === LabelType.CUBOID;
-        maskControlVisible = maskControlVisible || label.type === LabelType.MASK;
-        tagControlVisible = tagControlVisible || label.type === LabelType.TAG;
-    });
+    const visibleShapes = visibleShapesFromLabels(labels, annotationProfile);
+    const {
+        rectangle: rectangleControlVisible,
+        polygon: polygonControlVisible,
+        polyline: polylineControlVisible,
+        points: pointsControlVisible,
+        ellipse: ellipseControlVisible,
+        cuboid: cuboidControlVisible,
+        mask: maskControlVisible,
+        tag: tagControlVisible,
+        skeleton: skeletonControlVisible,
+    } = visibleShapes;
 
     const containerRef = React.useRef<HTMLDivElement>(null);
     const containerHeightRef = React.useRef<number>(Number.MAX_SAFE_INTEGER);

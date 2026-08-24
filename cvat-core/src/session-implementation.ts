@@ -820,6 +820,11 @@ export function implementTask(Task: typeof TaskClass): typeof TaskClass {
                 taskSpec.project_id = this.projectId;
             }
 
+            if (this.projectId === null) {
+                taskSpec.annotation_profile = this.annotationProfile;
+                taskSpec.related_image_mode = this.relatedImageMode;
+            }
+
             if (typeof this.subset !== 'undefined') {
                 taskSpec.subset = this.subset;
             }

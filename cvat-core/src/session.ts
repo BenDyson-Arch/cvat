@@ -5,8 +5,8 @@
 
 import { ChunkQuality } from 'cvat-data';
 import {
-    ChunkType, DimensionType, HistoryActions, JobStage,
-    JobState, JobType, MediaType, StorageLocation, TaskMode, TaskStatus,
+    AnnotationProfile, ChunkType, DimensionType, HistoryActions, JobStage,
+    JobState, JobType, MediaType, RelatedImageMode, StorageLocation, TaskMode, TaskStatus,
 } from './enums';
 import { Storage } from './storage';
 
@@ -606,6 +606,8 @@ export class Job extends Session {
         target_storage: Storage,
         parent_job_id: number | null;
         replicas_count: number;
+        annotation_profile: AnnotationProfile | null;
+        related_image_mode: RelatedImageMode;
     };
 
     constructor(initialData: InitializerType) {
@@ -638,6 +640,8 @@ export class Job extends Session {
             target_storage: undefined,
             parent_job_id: null,
             replicas_count: undefined,
+            annotation_profile: null,
+            related_image_mode: RelatedImageMode.CONTEXTUAL,
         };
 
         this.#data.id = initialData.id ?? this.#data.id;
@@ -657,6 +661,8 @@ export class Job extends Session {
         this.#data.created_date = initialData.created_date ?? this.#data.created_date;
         this.#data.parent_job_id = initialData.parent_job_id ?? this.#data.parent_job_id;
         this.#data.replicas_count = initialData.replicas_count ?? this.#data.replicas_count;
+        this.#data.annotation_profile = initialData.annotation_profile ?? this.#data.annotation_profile;
+        this.#data.related_image_mode = initialData.related_image_mode ?? this.#data.related_image_mode;
 
         if (Array.isArray(initialData.labels)) {
             this.#data.labels = initialData.labels.map((labelData) => {
@@ -770,6 +776,14 @@ export class Job extends Session {
 
     public get mediaType(): MediaType {
         return this.#data.media_type;
+    }
+
+    public get annotationProfile(): AnnotationProfile | null {
+        return this.#data.annotation_profile;
+    }
+
+    public get relatedImageMode(): RelatedImageMode {
+        return this.#data.related_image_mode;
     }
 
     public get parentJobId(): number | null {
@@ -887,6 +901,8 @@ export class Task extends Session {
     public readonly dataChunkType: ChunkType;
     public readonly dimension: DimensionType | undefined;
     public readonly mediaType: MediaType | undefined;
+    public readonly annotationProfile: AnnotationProfile | null;
+    public readonly relatedImageMode: RelatedImageMode;
     public readonly progress: {
         completedJobs: number,
         totalJobs: number,
@@ -948,6 +964,8 @@ export class Task extends Session {
             data_cloud_storage_id: undefined,
             dimension: undefined,
             media_type: undefined,
+            annotation_profile: null,
+            related_image_mode: RelatedImageMode.CONTEXTUAL,
             source_storage: undefined,
             target_storage: undefined,
             progress: undefined,
@@ -1032,6 +1050,8 @@ export class Task extends Session {
                     mode: data.mode,
                     dimension: data.dimension,
                     media_type: data.media_type,
+                    annotation_profile: data.annotation_profile,
+                    related_image_mode: data.related_image_mode,
                     data_compressed_chunk_type: data.data_compressed_chunk_type,
                     data_chunk_size: data.data_chunk_size,
                     target_storage: initialData.target_storage,
@@ -1084,6 +1104,12 @@ export class Task extends Session {
                 },
                 mode: {
                     get: () => data.mode,
+                },
+                annotationProfile: {
+                    get: () => data.annotation_profile,
+                },
+                relatedImageMode: {
+                    get: () => data.related_image_mode,
                 },
                 owner: {
                     get: () => data.owner,

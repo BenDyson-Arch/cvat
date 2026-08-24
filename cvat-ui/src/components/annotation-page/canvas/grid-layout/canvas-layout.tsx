@@ -6,11 +6,12 @@ import './styles.scss';
 import 'react-grid-layout/css/styles.css';
 
 import React, { useCallback, useEffect, useState } from 'react';
-import { useSelector } from 'react-redux';
+import { useDispatch, useSelector } from 'react-redux';
 import RGL, { WidthProvider } from 'react-grid-layout';
 import PropTypes from 'prop-types';
 import { isEqual } from 'lodash';
 import Layout from 'antd/lib/layout';
+import Select from 'antd/lib/select';
 import {
     CloseOutlined,
     DragOutlined,
@@ -23,7 +24,8 @@ import {
 
 import config from 'config';
 import { Canvas } from 'cvat-canvas-wrapper';
-import { DimensionType } from 'cvat-core-wrapper';
+import { DimensionType, RelatedImageMode } from 'cvat-core-wrapper';
+import { setActiveView } from 'actions/annotation-actions';
 import { CombinedState } from 'reducers';
 import CanvasWrapperComponent from 'components/annotation-page/canvas/views/canvas2d/canvas-wrapper';
 import CanvasWrapper3DComponent, {
@@ -144,15 +146,24 @@ const fitLayout = (type: DimensionType, layoutConfig: ItemLayout[]): ItemLayout[
 };
 
 function CanvasLayout({ type }: { type?: DimensionType }): JSX.Element {
+    const dispatch = useDispatch();
     const {
         relatedFiles,
         canvasInstance,
         canvasBackgroundColor,
+        frameData,
+        activeViewIndex,
+        relatedImageMode,
     } = useSelector((state: CombinedState) => ({
         relatedFiles: state.annotation.player.frame.relatedFiles,
         canvasInstance: state.annotation.canvas.instance,
         canvasBackgroundColor: state.settings.player.canvasBackgroundColor,
+        frameData: state.annotation.player.frame.data,
+        activeViewIndex: state.annotation.player.activeViewIndex,
+        relatedImageMode: state.annotation.job.instance?.relatedImageMode,
     }), shallowEqual);
+
+    const layoutRelatedFiles = relatedImageMode === RelatedImageMode.ALIGNED ? 0 : relatedFiles;
 
     const computeRowHeight = (): number => {
         const touchContent = window.document.querySelector(
@@ -185,8 +196,8 @@ function CanvasLayout({ type }: { type?: DimensionType }): JSX.Element {
     };
 
     const getLayout = useCallback(() => (
-        defaultLayout[(type as DimensionType).toUpperCase() as '2D' | '3D'][Math.min(relatedFiles, 3)]
-    ), [type, relatedFiles]);
+        defaultLayout[(type as DimensionType).toUpperCase() as '2D' | '3D'][Math.min(layoutRelatedFiles, 3)]
+    ), [type, layoutRelatedFiles]);
 
     const [layoutConfig, setLayoutConfig] = useState<ItemLayout[]>(getLayout());
     const [rowHeight, setRowHeight] = useState<number>(Math.floor(computeRowHeight()));
@@ -247,7 +258,7 @@ function CanvasLayout({ type }: { type?: DimensionType }): JSX.Element {
     }));
 
     const singleClassName = 'cvat-canvas-grid-root-single';
-    const className = !relatedFiles && children.length <= 1 ?
+    const className = !layoutRelatedFiles && children.length <= 1 ?
         `cvat-canvas-grid-root ${singleClassName}` : 'cvat-canvas-grid-root';
 
     return (
@@ -335,6 +346,24 @@ function CanvasLayout({ type }: { type?: DimensionType }): JSX.Element {
             )}
             { type === DimensionType.DIMENSION_3D && <CanvasWrapper3DComponent /> }
             <div className='cvat-grid-layout-common-setups'>
+                {relatedImageMode === RelatedImageMode.ALIGNED && relatedFiles > 0 && frameData ? (
+                    <Select
+                        className='cvat-aligned-view-selector'
+                        value={activeViewIndex}
+                        onChange={(value: number) => dispatch(setActiveView(value))}
+                        options={[
+                            {
+                                value: 0,
+                                label: `Primary: ${frameData.filename.split('/').pop()}`,
+                            },
+                            ...frameData.relatedFilePaths.map((path: string, index: number) => ({
+                                value: index + 1,
+                                label: path.split('/').pop() || path,
+                            })),
+                        ]}
+                        style={{ minWidth: 180 }}
+                    />
+                ) : null}
                 <CVATTooltip title='Fit views'>
                     <PicCenterOutlined
                         onClick={() => {
@@ -346,8 +375,8 @@ function CanvasLayout({ type }: { type?: DimensionType }): JSX.Element {
                 <CVATTooltip title='Add context image'>
                     <PlusOutlined
                         style={{
-                            pointerEvents: !relatedFiles ? 'none' : undefined,
-                            opacity: !relatedFiles ? 0.2 : undefined,
+                            pointerEvents: !layoutRelatedFiles ? 'none' : undefined,
+                            opacity: !layoutRelatedFiles ? 0.2 : undefined,
                         }}
                         disabled={!!relatedFiles}
                         onClick={() => {

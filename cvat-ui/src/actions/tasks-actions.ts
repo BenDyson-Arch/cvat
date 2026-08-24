@@ -231,6 +231,9 @@ ThunkAction {
 
         if (data.projectId) {
             description.project_id = data.projectId;
+        } else {
+            description.annotation_profile = data.annotationProfile || null;
+            description.related_image_mode = data.relatedImageMode;
         }
         if (data.advanced.bugTracker) {
             description.bug_tracker = data.advanced.bugTracker;

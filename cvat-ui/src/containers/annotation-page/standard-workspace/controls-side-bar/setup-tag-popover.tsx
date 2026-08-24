@@ -11,7 +11,7 @@ import SetupTagPopoverComponent from 'components/annotation-page/standard-worksp
 
 import { Canvas } from 'cvat-canvas-wrapper';
 import {
-    getCore, Label, ObjectState, ObjectType,
+    AnnotationProfile, getCore, Label, LabelType, ObjectState, ObjectType,
 } from 'cvat-core-wrapper';
 
 const cvat = getCore();
@@ -83,7 +83,9 @@ class DrawShapePopoverContainer extends React.PureComponent<Props, State> {
         const { states } = props;
         const frameTags = states.filter((objectState: any): boolean => objectState.objectType === ObjectType.TAG);
         this.satisfiedLabels = props.labels.filter((label: Label) => (
-            ['any', ObjectType.TAG].includes(label.type)
+            props.jobInstance.annotationProfile === AnnotationProfile.CLASSIFICATION ?
+                !label.hasParent && label.type !== LabelType.SKELETON :
+                ['any', ObjectType.TAG].includes(label.type)
         ));
 
         const defaultLabelID = this.satisfiedLabels.length ? this.satisfiedLabels[0].id as number : null;

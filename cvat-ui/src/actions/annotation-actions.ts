@@ -97,6 +97,7 @@ export enum AnnotationActionTypes {
     SWITCH_PLAY = 'SWITCH_PLAY',
     CONFIRM_CANVAS_READY = 'CONFIRM_CANVAS_READY',
     UPDATE_CACHED_CHUNKS = 'UPDATE_CACHED_CHUNKS',
+    SET_ACTIVE_VIEW = 'SET_ACTIVE_VIEW',
 
     UPDATE_ACTIVE_CONTROL = 'UPDATE_ACTIVE_CONTROL',
 
@@ -169,6 +170,13 @@ export enum AnnotationActionTypes {
     UPDATE_BRUSH_TOOLS_CONFIG = 'UPDATE_BRUSH_TOOLS_CONFIG',
     HIGHLIGHT_CONFLICT = 'HIGHLIGHT_CONFCLICT',
     HOVERED_CHAPTER = 'HOVERED_CHAPTER',
+}
+
+export function setActiveView(activeViewIndex: number): AnyAction {
+    return {
+        type: AnnotationActionTypes.SET_ACTIVE_VIEW,
+        payload: { activeViewIndex },
+    };
 }
 
 export enum AnnotationSource {

@@ -8,7 +8,9 @@ import { useDispatch, useSelector } from 'react-redux';
 import { shallowEqual } from 'utils/redux';
 import message from 'antd/lib/message';
 
-import { LabelType, ObjectType, ShapeType } from 'cvat-core-wrapper';
+import {
+    AnnotationProfile, LabelType, ObjectType, ShapeType,
+} from 'cvat-core-wrapper';
 import { CombinedState } from 'reducers';
 import { rememberObject, updateAnnotationsAsync } from 'actions/annotation-actions';
 import LabelItemContainer from 'containers/annotation-page/standard-workspace/objects-side-bar/label-item';
@@ -39,9 +41,10 @@ registerComponentShortcuts(componentShortcuts);
 function LabelsListComponent(): JSX.Element {
     const dispatch = useDispatch();
 
-    const { labels, keyMap } = useSelector((state: CombinedState) => ({
+    const { labels, keyMap, annotationProfile } = useSelector((state: CombinedState) => ({
         labels: state.annotation.job.labels,
         keyMap: state.shortcuts.keyMap,
+        annotationProfile: state.annotation.job.instance?.annotationProfile || null,
     }), shallowEqual);
 
     const labelIDs = labels.map((label: any): number => label.id);
@@ -92,7 +95,13 @@ function LabelsListComponent(): JSX.Element {
             if (Number.isInteger(activatedStateID)) {
                 const activatedState = states.filter((state: any) => state.clientID === activatedStateID)[0];
                 const bothAreTags = activatedState.objectType === ObjectType.TAG && label.type === LabelType.TAG;
-                const labelIsApplicable = label.type === LabelType.ANY ||
+                const labelIsApplicable = annotationProfile ? (
+                    !label.hasParent && (
+                        activatedState.shapeType === ShapeType.SKELETON ?
+                            label.type === LabelType.SKELETON :
+                            label.type !== LabelType.SKELETON
+                    )
+                ) : label.type === LabelType.ANY ||
                     (activatedState.shapeType === label.type && activatedState.shapeType !== ShapeType.SKELETON) ||
                     bothAreTags;
                 if (activatedState && labelIsApplicable) {
@@ -100,7 +109,7 @@ function LabelsListComponent(): JSX.Element {
                     dispatch(updateAnnotationsAsync([activatedState]));
                 }
             } else {
-                if (label.type === LabelType.TAG) {
+                if (annotationProfile === AnnotationProfile.CLASSIFICATION || label.type === LabelType.TAG) {
                     dispatch(rememberObject({ activeLabelID: labelID, activeObjectType: ObjectType.TAG }, false));
                 } else if (label.type === LabelType.MASK) {
                     dispatch(rememberObject({

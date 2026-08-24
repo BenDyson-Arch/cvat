@@ -61,6 +61,33 @@ class DimensionType(str, Enum):
         return self.value
 
 
+class AnnotationProfile(str, Enum):
+    CLASSIFICATION = "classification"
+    OBJECT_DETECTION = "object_detection"
+    INSTANCE_SEGMENTATION = "instance_segmentation"
+    SEMANTIC_SEGMENTATION = "semantic_segmentation"
+    KEYPOINTS = "keypoints"
+
+    @classmethod
+    def choices(cls):
+        return tuple((x.value, x.name) for x in cls)
+
+    def __str__(self):
+        return self.value
+
+
+class RelatedImageMode(str, Enum):
+    CONTEXTUAL = "contextual"
+    ALIGNED = "aligned"
+
+    @classmethod
+    def choices(cls):
+        return tuple((x.value, x.name) for x in cls)
+
+    def __str__(self):
+        return self.value
+
+
 class StatusChoice(str, Enum):
     """Deprecated. Use StageChoice and StateChoice instead"""
 
@@ -813,6 +840,14 @@ def clear_annotations_on_frames_in_honeypot_task(db_task: Task, frames: Sequence
 
 class Project(DirtyFieldsMixin, TimestampedModel, AssignableModel, FileSystemRelatedModel):
     name = SafeCharField(max_length=256)
+    annotation_profile = models.CharField(
+        max_length=32, choices=AnnotationProfile.choices(), null=True, blank=True, default=None
+    )
+    related_image_mode = models.CharField(
+        max_length=16,
+        choices=RelatedImageMode.choices(),
+        default=RelatedImageMode.CONTEXTUAL,
+    )
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.SET_NULL, related_name="+"
     )
@@ -937,6 +972,14 @@ class Task(DirtyFieldsMixin, TimestampedModel, AssignableModel, FileSystemRelate
         related_name="tasks",
         related_query_name="task",
     )
+    annotation_profile = models.CharField(
+        max_length=32, choices=AnnotationProfile.choices(), null=True, blank=True, default=None
+    )
+    related_image_mode = models.CharField(
+        max_length=16,
+        choices=RelatedImageMode.choices(),
+        default=RelatedImageMode.CONTEXTUAL,
+    )
     name = SafeCharField(max_length=256)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -1009,6 +1052,14 @@ class Task(DirtyFieldsMixin, TimestampedModel, AssignableModel, FileSystemRelate
             if prefetch
             else queryset
         )
+
+    @property
+    def effective_annotation_profile(self) -> str | None:
+        return self.project.annotation_profile if self.project_id else self.annotation_profile
+
+    @property
+    def effective_related_image_mode(self) -> str:
+        return self.project.related_image_mode if self.project_id else self.related_image_mode
 
     def get_dirname(self) -> Path:
         return settings.TASKS_ROOT / str(self.id)

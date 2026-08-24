@@ -6,6 +6,7 @@
 import { connect } from 'react-redux';
 
 import { Canvas } from 'cvat-canvas-wrapper';
+import { AnnotationProfile } from 'cvat-core-wrapper';
 import {
     updateActiveControl as updateActiveControlAction,
     redrawShapeAsync,
@@ -26,6 +27,7 @@ interface StateToProps {
     normalizedKeyMap: Record<string, string>;
     labels: CombinedState['annotation']['job']['labels'];
     frameData: any;
+    annotationProfile: AnnotationProfile | null;
 }
 
 interface DispatchToProps {
@@ -45,7 +47,7 @@ function mapStateToProps(state: CombinedState): StateToProps {
     const {
         annotation: {
             canvas: { instance: canvasInstance, activeControl },
-            job: { labels },
+            job: { labels, instance: jobInstance },
             player: {
                 frame: { data: frameData },
             },
@@ -64,6 +66,7 @@ function mapStateToProps(state: CombinedState): StateToProps {
         normalizedKeyMap,
         keyMap,
         frameData,
+        annotationProfile: jobInstance?.annotationProfile || null,
     };
 }
 

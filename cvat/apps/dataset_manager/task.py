@@ -30,6 +30,7 @@ from cvat.apps.dataset_manager.util import (
     format_import_exception,
 )
 from cvat.apps.engine import models, serializers
+from cvat.apps.engine.annotation_profiles import validate_annotations_for_profile
 from cvat.apps.engine.log import DatasetLogManager
 from cvat.apps.engine.plugins import plugin_decorator
 from cvat.apps.engine.utils import av_scan_paths, take_by
@@ -125,10 +126,24 @@ def merge_table_rows(rows, keys_for_merge, field_id):
 
 
 def _validate_input_annotations(
-    annotations: AnnotationIR | dict, *, db_data: models.Data, dimension: models.DimensionType
+    annotations: AnnotationIR | dict, *, db_task: models.Task
 ) -> AnnotationIR:
+    db_data = db_task.require_data()
     if not isinstance(annotations, AnnotationIR):
-        annotations = AnnotationIR(dimension, annotations)
+        annotations = AnnotationIR(db_task.dimension, annotations)
+
+    try:
+        validate_annotations_for_profile(
+            profile=db_task.effective_annotation_profile,
+            annotations=annotations,
+        )
+    except ValueError as ex:
+        object_kind, _, shape_type = str(ex).partition(":")
+        rejected = f" {shape_type}" if shape_type else ""
+        raise ValidationError(
+            f"Annotation profile '{db_task.effective_annotation_profile}' does not allow"
+            f"{rejected} {object_kind} annotations"
+        ) from ex
 
     if annotations.tracks and db_data.validation_mode == models.ValidationMode.GT_POOL:
         # Only tags and shapes can be used in tasks with GT pool
@@ -580,9 +595,7 @@ class JobAnnotation:
 
     def _validate_input_annotations(self, data: AnnotationIR | dict) -> AnnotationIR:
         db_task = self.db_job.segment.task
-        return _validate_input_annotations(
-            data, db_data=db_task.require_data(), dimension=db_task.dimension
-        )
+        return _validate_input_annotations(data, db_task=db_task)
 
     def _delete_job_labeledimages(self, ids__UNSAFE: list[int]) -> None:
         # ids__UNSAFE is a list, received from the user
@@ -1168,9 +1181,7 @@ class TaskAnnotation:
         return data
 
     def _validate_input_annotations(self, data: AnnotationIR | dict) -> AnnotationIR:
-        return _validate_input_annotations(
-            data, db_data=self.db_task.require_data(), dimension=self.db_task.dimension
-        )
+        return _validate_input_annotations(data, db_task=self.db_task)
 
     def update(self, data):
         self._patch_data(data, PatchAction.UPDATE)

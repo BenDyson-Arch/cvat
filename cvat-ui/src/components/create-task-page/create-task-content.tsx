@@ -12,9 +12,12 @@ import Collapse from 'antd/lib/collapse';
 import notification from 'antd/lib/notification';
 import Text from 'antd/lib/typography/Text';
 import Alert from 'antd/lib/alert';
+import Select from 'antd/lib/select';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { ValidateErrorEntity } from 'rc-field-form/lib/interface';
-import { getCore, Storage, StorageLocation } from 'cvat-core-wrapper';
+import {
+    AnnotationProfile, getCore, RelatedImageMode, Storage, StorageLocation,
+} from 'cvat-core-wrapper';
 import LabelsEditor from 'components/labels-editor/labels-editor';
 import FileManagerComponent, { Files } from 'components/file-manager/file-manager';
 import { RemoteFile } from 'components/file-manager/remote-browser';
@@ -42,6 +45,8 @@ export interface CreateTaskData {
     files: Files;
     activeFileManagerTab: TabName;
     cloudStorageId: number | null;
+    annotationProfile?: AnnotationProfile | null;
+    relatedImageMode?: RelatedImageMode;
 }
 
 enum SupportedShareTypes {
@@ -102,6 +107,8 @@ const defaultState: State = {
     },
     activeFileManagerTab: 'local',
     cloudStorageId: null,
+    annotationProfile: null,
+    relatedImageMode: RelatedImageMode.CONTEXTUAL,
     multiTasks: [],
     uploadFileErrorMessage: '',
     loading: false,
@@ -249,7 +256,18 @@ class CreateTaskContent extends React.PureComponent<Props & RouteComponentProps,
             projectId: value,
             subset: value && value === projectId ? subset : '',
             labels: value ? [] : state.labels,
+            annotationProfile: value ? state.annotationProfile : null,
+            relatedImageMode: value ? state.relatedImageMode : RelatedImageMode.CONTEXTUAL,
         }));
+
+        if (value) {
+            core.projects.get({ id: value }).then(([project]) => {
+                this.setState({
+                    annotationProfile: project.annotationProfile,
+                    relatedImageMode: project.relatedImageMode,
+                });
+            }).catch(() => {});
+        }
     };
 
     private handleChangeBasicConfiguration = (values: BaseConfiguration): void => {
@@ -627,6 +645,8 @@ class CreateTaskContent extends React.PureComponent<Props & RouteComponentProps,
             files: allFiles,
             activeFileManagerTab,
             cloudStorageId,
+            annotationProfile,
+            relatedImageMode,
         } = this.state;
 
         const files: (File | string)[] = allFiles[activeFileManagerTab];
@@ -647,6 +667,8 @@ class CreateTaskContent extends React.PureComponent<Props & RouteComponentProps,
                 },
                 activeFileManagerTab,
                 cloudStorageId,
+                annotationProfile,
+                relatedImageMode,
                 status: 'pending',
             }
             )),
@@ -862,6 +884,50 @@ class CreateTaskContent extends React.PureComponent<Props & RouteComponentProps,
         );
     }
 
+    private renderWorkflowBlock(): JSX.Element {
+        const {
+            projectId, annotationProfile, relatedImageMode,
+        } = this.state;
+        const inherited = projectId !== null;
+        return (
+            <>
+                <Col span={24}>
+                    <Text className='cvat-text-color'>Annotation workflow</Text>
+                    <Select
+                        allowClear={!inherited}
+                        disabled={inherited}
+                        placeholder='Unrestricted (legacy behavior)'
+                        value={annotationProfile}
+                        onChange={(value: AnnotationProfile | undefined) => {
+                            this.setState({ annotationProfile: value || null });
+                        }}
+                        options={[
+                            { value: AnnotationProfile.CLASSIFICATION, label: '2D classification' },
+                            { value: AnnotationProfile.OBJECT_DETECTION, label: '2D object detection' },
+                            { value: AnnotationProfile.INSTANCE_SEGMENTATION, label: '2D instance segmentation' },
+                            { value: AnnotationProfile.SEMANTIC_SEGMENTATION, label: '2D semantic segmentation' },
+                            { value: AnnotationProfile.KEYPOINTS, label: '2D keypoints' },
+                        ]}
+                        style={{ width: '100%' }}
+                    />
+                </Col>
+                <Col span={24}>
+                    <Text className='cvat-text-color'>Related images</Text>
+                    <Select
+                        disabled={inherited}
+                        value={relatedImageMode}
+                        onChange={(value: RelatedImageMode) => this.setState({ relatedImageMode: value })}
+                        options={[
+                            { value: RelatedImageMode.CONTEXTUAL, label: 'Contextual images' },
+                            { value: RelatedImageMode.ALIGNED, label: 'Aligned views (shared annotations)' },
+                        ]}
+                        style={{ width: '100%' }}
+                    />
+                </Col>
+            </>
+        );
+    }
+
     private renderFilesBlock(): JSX.Element {
         const { many } = this.props;
         const { uploadFileErrorMessage } = this.state;
@@ -1059,6 +1125,7 @@ class CreateTaskContent extends React.PureComponent<Props & RouteComponentProps,
 
                 {this.renderBasicBlock()}
                 {this.renderProjectBlock()}
+                {this.renderWorkflowBlock()}
                 {this.renderSubsetBlock()}
                 {this.renderLabelsBlock()}
                 {this.renderFilesBlock()}

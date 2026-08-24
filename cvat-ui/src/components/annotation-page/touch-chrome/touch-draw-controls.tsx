@@ -23,9 +23,11 @@ import {
     Canvas, CuboidDrawingMethod, RectDrawingMethod,
 } from 'cvat-canvas-wrapper';
 import {
-    Label, LabelType, ObjectType, ShapeType,
+    AnnotationProfile, Label, ObjectType, ShapeType,
 } from 'cvat-core-wrapper';
-import { visibleShapesFromLabels } from './visible-shapes';
+import {
+    applicableLabelsForShape, profileAllowsTracks, visibleShapesFromLabels,
+} from './visible-shapes';
 import { useTouchChrome } from './touch-chrome-context';
 
 const DRAW_TOOLS: {
@@ -60,32 +62,29 @@ const DRAW_TOOLS: {
     },
 ];
 
-function applicableLabels(labels: Label[], shapeType: ShapeType): Label[] {
-    return labels.filter((label: Label) => {
-        if (shapeType === ShapeType.SKELETON) {
-            return label.type === LabelType.SKELETON;
-        }
-        return !label.hasParent && ['any', shapeType].includes(label.type as string);
-    });
-}
-
 export default function TouchDrawControls({ expanded }: { expanded: boolean }): JSX.Element {
     const dispatch = useDispatch();
     const { dockPanel, setDockPanel } = useTouchChrome();
     const {
-        canvasInstance, labels, activeShapeType, activeLabelID,
+        canvasInstance, labels, activeShapeType, activeLabelID, annotationProfile,
     } = useSelector((state: CombinedState) => ({
         canvasInstance: state.annotation.canvas.instance,
         labels: state.annotation.job.labels as Label[],
         activeShapeType: state.annotation.drawing.activeShapeType,
         activeLabelID: state.annotation.drawing.activeLabelID,
+        annotationProfile: (
+            state.annotation.job.instance?.annotationProfile || null
+        ) as AnnotationProfile | null,
     }));
-    const visible = useMemo(() => visibleShapesFromLabels(labels), [labels]);
+    const visible = useMemo(
+        () => visibleShapesFromLabels(labels, annotationProfile),
+        [labels, annotationProfile],
+    );
     const firstVisibleTool = DRAW_TOOLS.find((tool) => visible[tool.visibleKey]);
     const selectedShape = activeShapeType || firstVisibleTool?.type || ShapeType.RECTANGLE;
     const labelsForShape = useMemo(
-        () => applicableLabels(labels, selectedShape),
-        [labels, selectedShape],
+        () => applicableLabelsForShape(labels, selectedShape, annotationProfile),
+        [labels, selectedShape, annotationProfile],
     );
     const selectedLabel = labelsForShape.find((label) => label.id === activeLabelID) || labelsForShape[0];
     const [objectType, setObjectType] = useState<ObjectType>(ObjectType.SHAPE);
@@ -121,12 +120,13 @@ export default function TouchDrawControls({ expanded }: { expanded: boolean }): 
         if (!(canvasInstance instanceof Canvas)) {
             return;
         }
-        const candidates = applicableLabels(labels, shapeType);
+        const candidates = applicableLabelsForShape(labels, shapeType, annotationProfile);
         const label = candidates.find((candidate) => candidate.id === labelID) || candidates[0];
         if (!label) {
             return;
         }
-        const effectiveObjectType = shapeType === ShapeType.MASK ? ObjectType.SHAPE : nextObjectType;
+        const effectiveObjectType = profileAllowsTracks(annotationProfile, shapeType) ?
+            nextObjectType : ObjectType.SHAPE;
         const effectivePoints = Object.prototype.hasOwnProperty.call(overrides, 'points') ?
             overrides.points : numberOfPoints;
         const effectiveRectMethod = overrides.rect ?? rectMethod;
@@ -154,7 +154,8 @@ export default function TouchDrawControls({ expanded }: { expanded: boolean }): 
             activeSimplifyPoly: effectiveSimplify,
         }));
     }, [
-        canvasInstance, labels, objectType, numberOfPoints, rectMethod, cuboidMethod, simplifyPoly, dispatch,
+        canvasInstance, labels, annotationProfile, objectType, numberOfPoints,
+        rectMethod, cuboidMethod, simplifyPoly, dispatch,
     ]);
 
     const availableTools = DRAW_TOOLS.filter((tool) => visible[tool.visibleKey]);
@@ -221,7 +222,7 @@ export default function TouchDrawControls({ expanded }: { expanded: boolean }): 
             {expanded && dockPanel === 'draw-settings' ? (
                 <div className='cvat-touch-draw-controls'>
                     <div className='cvat-touch-dock-rail cvat-touch-draw-settings'>
-                        {selectedShape !== ShapeType.MASK ? (
+                        {profileAllowsTracks(annotationProfile, selectedShape) ? (
                             <Segmented
                                 value={objectType}
                                 options={[

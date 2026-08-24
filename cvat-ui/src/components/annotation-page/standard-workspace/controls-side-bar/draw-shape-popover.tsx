@@ -16,6 +16,7 @@ import { ShapeType, Label, DimensionType } from 'cvat-core-wrapper';
 import { clamp } from 'utils/math';
 import LabelSelector from 'components/label-selector/label-selector';
 import CVATTooltip from 'components/common/cvat-tooltip';
+import { profileAllowsTracks } from 'components/annotation-page/touch-chrome/visible-shapes';
 
 interface Props {
     shapeType: ShapeType;
@@ -185,7 +186,7 @@ function DrawShapePopoverComponent(props: Props): JSX.Element {
                     <CVATTooltip title={`Press ${repeatShapeShortcut} to draw again`}>
                         <Button className={`cvat-draw-${shapeType}-shape-button`} onClick={onDrawShape}>Shape</Button>
                     </CVATTooltip>
-                    {shapeType !== ShapeType.MASK && (
+                    {profileAllowsTracks(jobInstance.annotationProfile || null, shapeType) && (
                         <CVATTooltip title={`Press ${repeatShapeShortcut} to draw again`}>
                             <Button
                                 className={`cvat-draw-${shapeType}-track-button`}
