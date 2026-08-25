@@ -157,7 +157,6 @@ interface DispatchToProps {
     onJoinAnnotations(states: ObjectState[], points: number[][]): void;
     onSliceAnnotations(state: ObjectState, results: number[][]): void;
     onActivateObject: (activatedStateID: number | null, activatedElementID: number | null) => void;
-    onOpenContextMenu(left: number, top: number): void;
     onExpandObject(objectState: ObjectState): void;
     onOpenLayerStack(sidebarCollapsed: boolean): void;
     onChangeBrightnessLevel(level: number): void;
@@ -380,9 +379,6 @@ function mapDispatchToProps(dispatch: any): DispatchToProps {
             }
 
             dispatch(activateObject(activatedStateID, activatedElementID, null));
-        },
-        onOpenContextMenu(left: number, top: number): void {
-            dispatch(updateCanvasContextMenu(true, left, top));
         },
         onExpandObject(objectState: ObjectState): void {
             dispatch(collapseObjectItems([objectState], false));
@@ -967,15 +963,12 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
     };
 
     private onCanvasLongPress = async (event: any): Promise<void> => {
-        const {
-            activatedStateID, onActivateObject, onOpenContextMenu,
-        } = this.props;
+        const { activatedStateID, onActivateObject } = this.props;
         const result = await this.selectAnnotationAt(event, true);
         if (result?.state) {
             if (activatedStateID !== result.state.clientID) {
                 onActivateObject(result.state.clientID, null);
             }
-            onOpenContextMenu(event.detail.clientX, event.detail.clientY);
         }
     };
 

@@ -264,6 +264,26 @@ html.cvat-touch-layout {
             border-radius: 14px;
             font-size: 20px;
         }
+
+        .cvat-touch-object-controls {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            min-width: 0;
+            width: 100%;
+        }
+
+        .cvat-touch-object-label-selector {
+            min-width: 130px;
+            max-width: 220px;
+            flex: 1;
+        }
+
+        .cvat-touch-object-edit {
+            min-height: 44px;
+            flex: none;
+            border-radius: 12px;
+        }
     }
 
     .cvat-touch-dock-nav {

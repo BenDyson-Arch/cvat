@@ -17,6 +17,7 @@ import { finishDraw, finishDrawAvailable } from 'utils/drawing';
 import { useTouchChrome } from './touch-chrome-context';
 import TouchToolsSheet from './touch-tools-sheet';
 import TouchDrawControls from './touch-draw-controls';
+import TouchObjectControls from './touch-object-controls';
 import { TOUCH_DOCK_EXTRAS_ID } from './constants';
 
 const DRAW_CONTROLS = new Set<ActiveControl>([
@@ -123,7 +124,9 @@ export default function TouchToolDock(): JSX.Element {
                             ) : null}
                         </div>
                     ) : null}
-                <div id={TOUCH_DOCK_EXTRAS_ID} className='cvat-touch-dock-extras' />
+                <div id={TOUCH_DOCK_EXTRAS_ID} className='cvat-touch-dock-extras'>
+                    <TouchObjectControls />
+                </div>
                 {(drawing || editing) && canvasInstance instanceof Canvas ? (
                     <Button
                         type='primary'
