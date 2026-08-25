@@ -160,31 +160,40 @@ export default function TouchDrawControls({ expanded }: { expanded: boolean }): 
 
     const availableTools = DRAW_TOOLS.filter((tool) => visible[tool.visibleKey]);
     const selectedTool = availableTools.find((tool) => tool.type === selectedShape) || availableTools[0];
+    const drawToolMenu = {
+        selectedKeys: [selectedShape],
+        items: availableTools.map((tool) => ({
+            key: tool.type,
+            icon: <Icon component={tool.icon} />,
+            label: tool.label,
+            onClick: () => {
+                setDockPanel('draw-tools');
+                startDrawing(tool.type, activeLabelID, ObjectType.SHAPE);
+            },
+        })),
+    };
     const modeSelector = selectorHost && selectedTool ? ReactDOM.createPortal((
-        <Dropdown
-            trigger={['click']}
-            menu={{
-                selectedKeys: [selectedShape],
-                items: availableTools.map((tool) => ({
-                    key: tool.type,
-                    icon: <Icon component={tool.icon} />,
-                    label: tool.label,
-                    onClick: () => {
-                        setDockPanel('draw-tools');
-                        startDrawing(tool.type, activeLabelID, ObjectType.SHAPE);
-                    },
-                })),
-            }}
-        >
+        <div className='cvat-touch-mode-selector-group'>
             <Button
                 type='text'
                 className={`cvat-touch-mode-selector ${expanded ? 'cvat-touch-dock-button-active' : ''}`}
                 aria-label={`Annotation mode: ${selectedTool.label}`}
+                onClick={() => {
+                    setDockPanel('draw-tools');
+                    startDrawing(selectedTool.type, activeLabelID, ObjectType.SHAPE);
+                }}
             >
                 <Icon component={selectedTool.icon} />
-                <DownOutlined className='cvat-touch-mode-selector-chevron' />
             </Button>
-        </Dropdown>
+            <Dropdown trigger={['click']} menu={drawToolMenu}>
+                <Button
+                    type='text'
+                    className='cvat-touch-mode-selector-menu'
+                    aria-label='Choose annotation mode'
+                    icon={<DownOutlined className='cvat-touch-mode-selector-chevron' />}
+                />
+            </Dropdown>
+        </div>
     ), selectorHost) : null;
     const classSelector = classSelectorHost && selectedLabel ? ReactDOM.createPortal((
         <Dropdown

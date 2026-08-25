@@ -155,6 +155,15 @@ export default function CreateProjectContent(): JSX.Element {
 
     const submit = async (): Promise<any> => {
         try {
+            if (annotationProfile && !projectLabels.length) {
+                notification.error({
+                    message: 'Could not create a project',
+                    description: 'A project with an annotation workflow must contain at least one label',
+                    className: 'cvat-notification-create-project-fail',
+                });
+                return false;
+            }
+
             let projectData: Record<string, any> = {};
             if (nameFormRef.current) {
                 const basicValues = await nameFormRef.current.validateFields();

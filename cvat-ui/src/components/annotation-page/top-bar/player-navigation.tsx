@@ -21,6 +21,7 @@ import { Workspace, CombinedState } from 'reducers';
 import { RestoreIcon } from 'icons';
 import { registerComponentShortcuts } from 'actions/shortcuts-actions';
 import CVATTooltip from 'components/common/cvat-tooltip';
+import AlignedViewSelector from 'components/annotation-page/top-bar/aligned-view-selector';
 import { clamp } from 'utils/math';
 import GlobalHotKeys, { KeyMap } from 'utils/mousetrap-react';
 import { ShortcutScope } from 'utils/enums';
@@ -238,6 +239,9 @@ function PlayerNavigation(props: Props): JSX.Element {
                     </Col>
                 </Row>
                 <Row justify='center'>
+                    <Col>
+                        <AlignedViewSelector />
+                    </Col>
                     <Col className='cvat-player-filename-wrapper'>
                         <CVATTooltip title={`${frameFilename}`}>
                             <Text type='secondary'>{frameFilename}</Text>

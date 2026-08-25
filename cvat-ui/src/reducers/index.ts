@@ -935,6 +935,8 @@ export interface AnnotationState {
         ranges: string;
         navigationBlocked: boolean;
         activeViewIndex: number;
+        pendingViewIndex: number | null;
+        activeViewLoading: boolean;
         playing: boolean;
         frameAngles: number[];
         hoveredChapter: number | null;

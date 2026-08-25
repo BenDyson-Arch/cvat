@@ -459,12 +459,24 @@ class CreateTaskContent extends React.PureComponent<Props & RouteComponentProps,
     };
 
     private validateBlocks = (): Promise<any> => new Promise((resolve, reject) => {
-        const { projectId } = this.state;
+        const {
+            projectId, labels, annotationProfile,
+        } = this.state;
 
         if (!this.validateFiles()) {
             notification.error({
                 message: 'Could not create a task',
                 description: 'A task must contain at least one file',
+                className: 'cvat-notification-create-task-fail',
+            });
+            reject();
+            return;
+        }
+
+        if (!projectId && annotationProfile && !labels.length) {
+            notification.error({
+                message: 'Could not create a task',
+                description: 'A task with an annotation workflow must contain at least one label',
                 className: 'cvat-notification-create-task-fail',
             });
             reject();

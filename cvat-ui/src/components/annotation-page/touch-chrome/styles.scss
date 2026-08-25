@@ -46,6 +46,13 @@ html.cvat-touch-layout {
         display: none;
     }
 
+    .ant-drawer-body,
+    .ant-dropdown-menu,
+    .cvat-touch-inline-tools,
+    .cvat-touch-tool-dock {
+        overscroll-behavior: contain;
+    }
+
     .cvat-canvas-image-setups-trigger {
         display: none;
     }
@@ -68,14 +75,30 @@ html.cvat-touch-layout {
     }
 
     .cvat-annotation-header-button {
+        display: flex;
+        align-items: center;
+        justify-content: center;
         width: 40px;
         min-width: 40px;
         height: 40px;
         margin: 0;
         padding: 0;
+        border-radius: 10px;
+        font-size: 18px;
+
+        > .anticon {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+        }
 
         > span:not([role='img']) {
             display: none;
+        }
+
+        &.cvat-button-active {
+            background: $background-color-1;
         }
     }
 
@@ -83,6 +106,7 @@ html.cvat-touch-layout {
         display: flex;
         align-items: center;
         flex-shrink: 0;
+        gap: 2px;
     }
 
     .cvat-touch-header-player {
@@ -98,6 +122,7 @@ html.cvat-touch-layout {
         min-width: 56px;
         height: 40px;
         padding: 0 8px;
+        border-radius: 10px;
         font-variant-numeric: tabular-nums;
     }
 }
@@ -362,19 +387,32 @@ html.cvat-touch-layout {
         flex: none;
     }
 
-    .cvat-touch-mode-selector {
-        min-width: 58px;
+    .cvat-touch-mode-selector-group {
+        display: inline-flex;
         height: 44px;
-        padding: 0 10px;
         border-radius: 14px;
+        overflow: hidden;
+    }
+
+    .cvat-touch-mode-selector {
+        min-width: 40px;
+        height: 44px;
+        padding: 0 8px;
+        border-radius: 14px 0 0 14px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 7px;
 
         &.cvat-touch-dock-button-active {
             background: $header-color;
         }
+    }
+
+    .cvat-touch-mode-selector-menu {
+        width: 24px;
+        height: 44px;
+        padding: 0;
+        border-radius: 0 14px 14px 0;
     }
 
     .cvat-touch-mode-selector-chevron {

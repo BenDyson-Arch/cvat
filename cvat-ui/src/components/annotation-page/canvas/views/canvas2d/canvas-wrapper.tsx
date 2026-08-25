@@ -37,6 +37,7 @@ import {
     updateActiveControl as updateActiveControlAction,
     updateAnnotationsAsync,
     createAnnotationsAsync,
+    saveAnnotationsAsync,
     mergeAnnotationsAsync,
     groupAnnotationsAsync,
     joinAnnotationsAsync,
@@ -137,20 +138,26 @@ interface StateToProps {
     activeControl: ActiveControl;
     activeObjectHidden: boolean;
     activeViewIndex: number;
+    pendingViewIndex: number | null;
 }
 
 interface DispatchToProps {
     onSetupCanvas(): void;
     onResetCanvas: () => void;
     updateActiveControl: (activeControl: ActiveControl) => void;
-    onUpdateAnnotations(states: ObjectState[]): void;
-    onCreateAnnotations(states: ObjectState[], source?: AnnotationSource): void;
+    onUpdateAnnotations(states: ObjectState[], saveAfterUpdate?: boolean): Promise<void>;
+    onCreateAnnotations(
+        states: ObjectState[],
+        source?: AnnotationSource,
+        saveAfterCreate?: boolean,
+    ): Promise<void>;
     onMergeAnnotations(states: ObjectState[]): void;
     onSplitAnnotations(state: ObjectState): void;
     onGroupAnnotations(states: ObjectState[]): void;
     onJoinAnnotations(states: ObjectState[], points: number[][]): void;
     onSliceAnnotations(state: ObjectState, results: number[][]): void;
     onActivateObject: (activatedStateID: number | null, activatedElementID: number | null) => void;
+    onOpenContextMenu(left: number, top: number): void;
     onExpandObject(objectState: ObjectState): void;
     onOpenLayerStack(sidebarCollapsed: boolean): void;
     onChangeBrightnessLevel(level: number): void;
@@ -180,6 +187,7 @@ function mapStateToProps(state: CombinedState): StateToProps {
                 frame: { data: frameData, number: frame },
                 frameAngles,
                 activeViewIndex,
+                pendingViewIndex,
             },
             annotations: {
                 states: annotations,
@@ -287,6 +295,7 @@ function mapStateToProps(state: CombinedState): StateToProps {
         imageFilters,
         activeObjectHidden,
         activeViewIndex,
+        pendingViewIndex,
     };
 }
 
@@ -330,14 +339,25 @@ function mapDispatchToProps(dispatch: any): DispatchToProps {
         updateActiveControl(activeControl: ActiveControl): void {
             dispatch(updateActiveControlAction(activeControl));
         },
-        onUpdateAnnotations(states: ObjectState[]): void {
-            dispatch(updateAnnotationsAsync(states));
+        onUpdateAnnotations(states: ObjectState[], saveAfterUpdate = false): Promise<void> {
+            return dispatch(updateAnnotationsAsync(states)).then(() => {
+                if (saveAfterUpdate) {
+                    return dispatch(saveAnnotationsAsync());
+                }
+                return undefined;
+            });
         },
         onCreateAnnotations(
             states: ObjectState[],
             source: AnnotationSource = AnnotationSource.OTHER,
-        ): void {
-            dispatch(createAnnotationsAsync(states, source));
+            saveAfterCreate = false,
+        ): Promise<void> {
+            return dispatch(createAnnotationsAsync(states, source)).then((clientIDs: number[]) => {
+                if (saveAfterCreate && clientIDs.length) {
+                    return dispatch(saveAnnotationsAsync());
+                }
+                return undefined;
+            });
         },
         onMergeAnnotations(states: ObjectState[]): void {
             dispatch(mergeAnnotationsAsync(states));
@@ -360,6 +380,9 @@ function mapDispatchToProps(dispatch: any): DispatchToProps {
             }
 
             dispatch(activateObject(activatedStateID, activatedElementID, null));
+        },
+        onOpenContextMenu(left: number, top: number): void {
+            dispatch(updateCanvasContextMenu(true, left, top));
         },
         onExpandObject(objectState: ObjectState): void {
             dispatch(collapseObjectItems([objectState], false));
@@ -515,6 +538,7 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             focusedObjectPadding,
             renderData,
             activeViewIndex,
+            pendingViewIndex,
         } = this.props;
         const { canvasInstance } = this.props as { canvasInstance: Canvas };
 
@@ -625,7 +649,8 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             prevProps.frameData !== frameData ||
             prevProps.hiddenZLayers !== hiddenZLayers ||
             prevProps.renderData !== renderData ||
-            prevProps.activeViewIndex !== activeViewIndex
+            prevProps.activeViewIndex !== activeViewIndex ||
+            prevProps.pendingViewIndex !== pendingViewIndex
         ) {
             this.updateCanvas();
         } else if (prevProps.imageFilters !== imageFilters) {
@@ -667,6 +692,7 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
         canvasInstance.html().removeEventListener('canvas.find', this.onCanvasFindObject);
         canvasInstance.html().removeEventListener('canvas.deactivated', this.onCanvasShapeDeactivated);
         canvasInstance.html().removeEventListener('canvas.moved', this.onCanvasCursorMoved);
+        canvasInstance.html().removeEventListener('canvas.longpress', this.onCanvasLongPress);
 
         canvasInstance.html().removeEventListener('canvas.zoom', this.onCanvasZoomChanged);
         canvasInstance.html().removeEventListener('canvas.fit', this.onCanvasImageFitted);
@@ -755,7 +781,7 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
         const source = simplifyPoly && [ShapeType.POLYGON, ShapeType.POLYLINE].includes(state.shapeType) ?
             AnnotationSource.DRAW_SIMPLIFIED_POLY : AnnotationSource.OTHER;
 
-        onCreateAnnotations([objectState], source);
+        onCreateAnnotations([objectState], source, event.detail.continue);
         onUpdateEditedObject(null);
     };
 
@@ -892,27 +918,64 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
         }
     };
 
+    private selectAnnotationAt = async (event: any, useTouchTolerance: boolean): Promise<any | null> => {
+        const { jobInstance } = this.props;
+        const {
+            states, x, y, scale = 1,
+        } = event.detail;
+        const radius = useTouchTolerance ? 16 / Math.max(scale, 0.01) : 0;
+        const offsets = radius ? [
+            [0, 0],
+            [-radius, 0], [radius, 0], [0, -radius], [0, radius],
+            [-radius, -radius], [radius, -radius], [-radius, radius], [radius, radius],
+        ] : [[0, 0]];
+
+        for (const [offsetX, offsetY] of offsets) {
+            const result = await jobInstance.annotations.select(states, x + offsetX, y + offsetY);
+            if (result?.state) {
+                if (
+                    [ShapeType.POLYLINE, ShapeType.POINTS].includes(result.state.shapeType) &&
+                    result.distance > MAX_DISTANCE_TO_OPEN_SHAPE
+                ) {
+                    continue;
+                }
+                return result;
+            }
+        }
+
+        return null;
+    };
+
     private onCanvasCursorMoved = async (event: any): Promise<void> => {
         const {
-            jobInstance, activatedStateID, activatedElementID, workspace, onActivateObject,
+            activatedStateID, activatedElementID, workspace, onActivateObject,
         } = this.props;
 
         if (![Workspace.STANDARD, Workspace.REVIEW, Workspace.SINGLE_SHAPE].includes(workspace)) {
             return;
         }
 
-        const result = await jobInstance.annotations.select(event.detail.states, event.detail.x, event.detail.y);
+        const result = await this.selectAnnotationAt(event, !!event.detail.isTap);
         if (result && result.state) {
-            if ([ShapeType.POLYLINE, ShapeType.POINTS].includes(result.state.shapeType)) {
-                if (result.distance > MAX_DISTANCE_TO_OPEN_SHAPE) {
-                    return;
-                }
-            }
-
             const newActivatedElement = event.detail.activatedElementID || null;
             if (activatedStateID !== result.state.clientID || activatedElementID !== newActivatedElement) {
                 onActivateObject(result.state.clientID, event.detail.activatedElementID || null);
             }
+        } else if (event.detail.isTap && activatedStateID !== null) {
+            onActivateObject(null, null);
+        }
+    };
+
+    private onCanvasLongPress = async (event: any): Promise<void> => {
+        const {
+            activatedStateID, onActivateObject, onOpenContextMenu,
+        } = this.props;
+        const result = await this.selectAnnotationAt(event, true);
+        if (result?.state) {
+            if (activatedStateID !== result.state.clientID) {
+                onActivateObject(result.state.clientID, null);
+            }
+            onOpenContextMenu(event.detail.clientX, event.detail.clientY);
         }
     };
 
@@ -937,7 +1000,7 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             // do not need to reset and deactivate if it was just resizing/dragging and other simple actions
             updateActiveControl(ActiveControl.CURSOR);
         }
-        onUpdateAnnotations([state]);
+        onUpdateAnnotations([state], isTouchLayout());
         onUpdateEditedObject(null);
     };
 
@@ -1032,8 +1095,9 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
         const {
             hiddenZLayers, annotations, frameData,
             workspace, frame, imageFilters, renderData,
-            activeViewIndex, jobInstance,
+            activeViewIndex, pendingViewIndex, jobInstance,
         } = this.props;
+        const requestedViewIndex = pendingViewIndex ?? activeViewIndex;
 
         const { canvasInstance } = this.props as { canvasInstance: Canvas };
         if (frameData !== null && canvasInstance) {
@@ -1044,11 +1108,16 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
             }).filter((state: ObjectState): boolean => !hiddenZLayers.has(state.zOrder));
             const proxy = new Proxy(frameData, {
                 get: (_frameData, prop, receiver) => {
+                    if (prop === 'number' && requestedViewIndex > 0) {
+                        const viewCount = _frameData.relatedFilePaths.length + 1;
+                        return _frameData.number + requestedViewIndex / viewCount;
+                    }
                     if (prop === 'data') {
                         return async (...args: any[]) => {
-                            if (activeViewIndex > 0) {
+                            if (requestedViewIndex > 0) {
                                 const contextImages = await jobInstance.frames.contextImage(frame);
-                                const key = Object.keys(contextImages).sort()[activeViewIndex - 1];
+                                const key = Object.keys(contextImages)
+                                    .sort((a, b) => +a - +b)[requestedViewIndex - 1];
                                 const imageData = contextImages[key];
                                 if (imageData) {
                                     return {
@@ -1159,6 +1228,7 @@ class CanvasWrapperComponent extends React.PureComponent<Props> {
         canvasInstance.html().addEventListener('canvas.find', this.onCanvasFindObject);
         canvasInstance.html().addEventListener('canvas.deactivated', this.onCanvasShapeDeactivated);
         canvasInstance.html().addEventListener('canvas.moved', this.onCanvasCursorMoved);
+        canvasInstance.html().addEventListener('canvas.longpress', this.onCanvasLongPress);
 
         canvasInstance.html().addEventListener('canvas.zoom', this.onCanvasZoomChanged);
         canvasInstance.html().addEventListener('canvas.fit', this.onCanvasImageFitted);

@@ -34,6 +34,8 @@ export enum Actions {
     REMOVE_ANNOTATIONS = 'remove_annotations',
     RUN_ACTIONS = 'run_actions',
     OPEN_TASK = 'open_task',
+    OPEN_JOBS = 'open_jobs',
+    OPEN_TASKS = 'open_tasks',
     FINISH_JOB = 'finish_job',
 }
 
@@ -77,7 +79,15 @@ function AnnotationMenuComponent(props: Props): JSX.Element {
 
     const openTask = useCallback(() => {
         history.push(`/tasks/${jobInstance.taskId}`);
-    }, [jobInstance.taskId]);
+    }, [history, jobInstance.taskId]);
+
+    const openJobs = useCallback(() => {
+        history.push('/jobs');
+    }, [history]);
+
+    const openTasks = useCallback(() => {
+        history.push('/tasks');
+    }, [history]);
 
     const uploadAnnotations = useCallback(() => {
         dispatch(importActions.openImportDatasetModal(jobInstance));
@@ -108,6 +118,28 @@ function AnnotationMenuComponent(props: Props): JSX.Element {
     const menuItems: [NonNullable<MenuProps['items']>[0], number][] = [];
 
     menuItems.push([{
+        key: Actions.OPEN_TASK,
+        label: 'Open the task',
+        onClick: openTask,
+    }, 1]);
+
+    menuItems.push([{
+        key: Actions.OPEN_JOBS,
+        label: 'All jobs',
+        onClick: openJobs,
+    }, 2]);
+
+    menuItems.push([{
+        key: Actions.OPEN_TASKS,
+        label: 'All tasks',
+        onClick: openTasks,
+    }, 3]);
+
+    menuItems.push([{
+        type: 'divider',
+    }, 4]);
+
+    menuItems.push([{
         key: Actions.LOAD_JOB_ANNO,
         label: 'Upload annotations',
         onClick: uploadAnnotations,
@@ -132,12 +164,6 @@ function AnnotationMenuComponent(props: Props): JSX.Element {
             openAnnotationsActionModal();
         },
     }, 40]);
-
-    menuItems.push([{
-        key: Actions.OPEN_TASK,
-        label: 'Open the task',
-        onClick: openTask,
-    }, 50]);
 
     menuItems.push([{
         key: 'job-state-submenu',

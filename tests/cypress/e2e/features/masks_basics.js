@@ -615,6 +615,18 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
                 });
             }
 
+            function writeNativeMaskPixelAlpha(clientX, clientY, alpha) {
+                return cy.get('.cvat_native_touch_masks_canvas:visible').then(([$canvas]) => {
+                    const rect = $canvas.getBoundingClientRect();
+                    const x = Math.round((clientX - rect.left) * ($canvas.width / rect.width));
+                    const y = Math.round((clientY - rect.top) * ($canvas.height / rect.height));
+                    const context = $canvas.getContext('2d');
+                    const pixel = context.createImageData(1, 1);
+                    pixel.data.set([255, 255, 255, alpha]);
+                    context.putImageData(pixel, x, y);
+                });
+            }
+
             cy.visit(`/tasks/${taskId}/jobs/${jobId}`, {
                 onBeforeLoad(win) {
                     Object.defineProperty(win.navigator, 'userAgent', {
@@ -628,6 +640,15 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
                 },
             });
             cy.get('.cvat-canvas-container').should('be.visible');
+            cy.get('#cvat_canvas_wrapper').then(([$wrapper]) => {
+                const TouchMoveEvent = $wrapper.ownerDocument.defaultView.Event;
+                const touchMove = new TouchMoveEvent('touchmove', {
+                    bubbles: true,
+                    cancelable: true,
+                });
+                $wrapper.dispatchEvent(touchMove);
+                expect(touchMove.defaultPrevented).to.be.true;
+            });
             cy.get('.cvat-touch-tool-dock').should('be.visible').then(([$dock]) => {
                 cy.get('.cvat-canvas-container').then(([$canvas]) => {
                     expect($dock.getBoundingClientRect().top).to.be.at.least(
@@ -636,6 +657,19 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
                 });
             });
             cy.get('.cvat-header').should('not.be.visible');
+            cy.get('.cvat-touch-annotation-header-inner .cvat-annotation-header-button').each(($button) => {
+                expect($button.outerWidth()).to.equal(40);
+                expect($button.outerHeight()).to.equal(40);
+            });
+            cy.contains('.cvat-touch-annotation-header-inner .cvat-annotation-header-button', 'Menu').click();
+            cy.get('.cvat-annotation-menu:visible').within(() => {
+                cy.contains('Open the task').should('be.visible');
+                cy.contains('All jobs').should('be.visible');
+                cy.contains('All tasks').should('be.visible');
+            });
+            cy.get('body').type('{esc}');
+            cy.get('.cvat-touch-annotation-header-inner [aria-label="Enter fullscreen"]').should('not.exist');
+            cy.get('.cvat-touch-annotation-header-inner [aria-label="Exit fullscreen"]').should('not.exist');
             cy.get('.cvat-canvas-layer-stack-trigger').should('not.be.visible');
             cy.get('.cvat-touch-tool-dock [aria-label="Select"]').then(([$select]) => {
                 cy.get('.cvat-touch-mode-selector').then(([$mode]) => {
@@ -668,6 +702,7 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
                     );
                 });
             });
+            cy.get('.cvat-touch-brush-palette .cvat-touch-brush-size-value').should('have.text', '40');
             cy.get('#cvat_canvas_wrapper')
                 .trigger('pointerdown', {
                     pointerId: 60,
@@ -720,6 +755,8 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
                     clientY: 280,
                 });
             cy.get('.cvat-touch-brush-palette [aria-label="Fill enclosed area"]').click();
+            writeNativeMaskPixelAlpha(400, 360, 64);
+            readNativeMaskPixelAlpha(400, 360).should('equal', 64);
             cy.get('#cvat_canvas_wrapper')
                 .trigger('pointerdown', {
                     pointerId: 61,
@@ -739,7 +776,28 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
                     clientX: 400,
                     clientY: 360,
                 });
-            readNativeMaskPixelAlpha(400, 360).should('be.greaterThan', 0);
+            readNativeMaskPixelAlpha(400, 360).should('equal', 255);
+            readNativeMaskPixelAlpha(600, 360).should('equal', 0);
+            cy.get('#cvat_canvas_wrapper')
+                .trigger('pointerdown', {
+                    pointerId: 62,
+                    pointerType: 'pen',
+                    pressure: 0.5,
+                    button: 0,
+                    buttons: 1,
+                    clientX: 600,
+                    clientY: 360,
+                })
+                .trigger('pointerup', {
+                    pointerId: 62,
+                    pointerType: 'pen',
+                    pressure: 0,
+                    button: 0,
+                    buttons: 0,
+                    clientX: 600,
+                    clientY: 360,
+                });
+            readNativeMaskPixelAlpha(600, 360).should('equal', 0);
             cy.get('.cvat-touch-brush-palette [aria-label="Brush"]').click();
             cy.get('.cvat-touch-brush-palette-size .ant-slider').should('be.visible')
                 .click('top');

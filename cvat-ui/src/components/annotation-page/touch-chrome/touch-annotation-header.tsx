@@ -4,6 +4,7 @@
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { useHistory } from 'react-router';
 import Button from 'antd/lib/button';
 import Dropdown from 'antd/lib/dropdown';
 import Modal from 'antd/lib/modal';
@@ -11,25 +12,36 @@ import notification from 'antd/lib/notification';
 import Popover from 'antd/lib/popover';
 import Slider from 'antd/lib/slider';
 import InputNumber from 'antd/lib/input-number';
-import Icon, { EllipsisOutlined, LeftOutlined, RightOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import Icon, {
+    EllipsisOutlined,
+    FullscreenExitOutlined,
+    FullscreenOutlined,
+    LeftOutlined,
+    RightOutlined,
+    UnorderedListOutlined,
+} from '@ant-design/icons';
 import { MenuProps } from 'antd/lib/menu';
 import MDEditor from '@uiw/react-md-editor';
 import rehypeSanitize from 'rehype-sanitize';
 
 import { UndoIcon, RedoIcon } from 'icons';
 import { CombinedState, NavigationType, Workspace } from 'reducers';
-import { Job, DimensionType, JobStage, JobState } from 'cvat-core-wrapper';
+import {
+    Job, DimensionType, JobStage, JobState,
+} from 'cvat-core-wrapper';
 import {
     changeFrameAsync,
     changeWorkspaceAsync,
     collectStatisticsAsync,
     redoActionAsync,
+    setForceExitAnnotationFlag,
     showFilters as showFiltersAction,
     showStatistics as showStatisticsAction,
     switchPlay,
     undoActionAsync,
 } from 'actions/annotation-actions';
 import AnnotationMenuComponent from 'components/annotation-page/top-bar/annotation-menu';
+import AlignedViewSelector from 'components/annotation-page/top-bar/aligned-view-selector';
 import SaveAnnotationsButton from 'components/annotation-page/top-bar/save-annotations-button';
 import 'components/annotation-page/top-bar/left-group';
 import 'components/annotation-page/top-bar/player-buttons';
@@ -37,6 +49,8 @@ import GlobalHotKeys from 'utils/mousetrap-react';
 import { subKeyMap } from 'utils/component-subkeymap';
 import { ShortcutScope } from 'utils/enums';
 import isAbleToChangeFrame from 'utils/is-able-to-change-frame';
+import { isIPadLike } from 'utils/pointer';
+import { writeLatestFrame } from 'utils/remember-latest-frame';
 import config from 'config';
 import { useTouchChrome } from './touch-chrome-context';
 
@@ -75,8 +89,11 @@ const headerShortcuts = {
 
 export default function TouchAnnotationHeader(): JSX.Element {
     const dispatch = useDispatch();
+    const history = useHistory();
     const { objectsOpen, setObjectsOpen } = useTouchChrome();
     const [frameOpen, setFrameOpen] = useState(false);
+    const [fullscreen, setFullscreen] = useState(Boolean(window.document.fullscreenElement));
+    const fullscreenAvailable = window.document.fullscreenEnabled && !isIPadLike();
 
     const {
         jobInstance,
@@ -92,6 +109,7 @@ export default function TouchAnnotationHeader(): JSX.Element {
         stopFrame,
         frameFilename,
         initialOpenGuide,
+        forceExit,
     } = useSelector((state: CombinedState) => {
         const job = state.annotation.job.instance as Job;
         return {
@@ -112,6 +130,7 @@ export default function TouchAnnotationHeader(): JSX.Element {
             stopFrame: job.stopFrame,
             frameFilename: state.annotation.player.frame.filename,
             initialOpenGuide: state.annotation.job.queryParameters.initialOpenGuide,
+            forceExit: state.annotation.annotations.saving.forceExit,
         };
     });
 
@@ -120,6 +139,27 @@ export default function TouchAnnotationHeader(): JSX.Element {
             dispatch(changeFrameAsync(frame));
         }
     }, [dispatch]);
+
+    const toggleFullscreen = useCallback(() => {
+        const request = window.document.fullscreenElement ?
+            window.document.exitFullscreen() :
+            window.document.documentElement.requestFullscreen();
+        request.catch((error: Error) => {
+            notification.warning({
+                message: 'Could not change fullscreen mode',
+                description: error.message,
+            });
+        });
+    }, []);
+
+    useEffect(() => {
+        const handleFullscreenChange = (): void => {
+            setFullscreen(Boolean(window.document.fullscreenElement));
+        };
+
+        window.document.addEventListener('fullscreenchange', handleFullscreenChange);
+        return () => window.document.removeEventListener('fullscreenchange', handleFullscreenChange);
+    }, []);
 
     const goAdjacent = useCallback(async (direction: 1 | -1) => {
         const from = direction > 0 ?
@@ -139,7 +179,10 @@ export default function TouchAnnotationHeader(): JSX.Element {
                 changeFrame(newFrame);
             }
         }
-    }, [jobInstance, frameNumber, startFrame, stopFrame, showDeletedFrames, playing, navigationType, changeFrame, dispatch]);
+    }, [
+        jobInstance, frameNumber, startFrame, stopFrame, showDeletedFrames,
+        playing, navigationType, changeFrame, dispatch,
+    ]);
 
     const openGuide = useCallback(() => {
         const padding = Math.min(window.screen.availHeight, window.screen.availWidth) * 0.4;
@@ -200,6 +243,44 @@ export default function TouchAnnotationHeader(): JSX.Element {
         }
     }, []);
 
+    useEffect(() => {
+        const confirmationMessage = 'You have unsaved changes, please confirm leaving this page.';
+        const unblock = history.block((location) => {
+            writeLatestFrame(jobInstance.id, frameNumber);
+            if (
+                jobInstance.annotations.hasUnsavedChanges() &&
+                location.pathname !== `/tasks/${jobInstance.taskId}/jobs/${jobInstance.id}` &&
+                !forceExit
+            ) {
+                return confirmationMessage;
+            }
+
+            if (forceExit) {
+                dispatch(setForceExitAnnotationFlag(false));
+            }
+            return undefined;
+        });
+        const handleBeforeUnload = (event: BeforeUnloadEvent): string | undefined => {
+            writeLatestFrame(jobInstance.id, frameNumber);
+            if (jobInstance.annotations.hasUnsavedChanges() && !forceExit) {
+                // eslint-disable-next-line no-param-reassign
+                event.returnValue = confirmationMessage;
+                return confirmationMessage;
+            }
+
+            if (forceExit) {
+                dispatch(setForceExitAnnotationFlag(false));
+            }
+            return undefined;
+        };
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => {
+            unblock();
+            window.removeEventListener('beforeunload', handleBeforeUnload);
+        };
+    }, [dispatch, forceExit, frameNumber, history, jobInstance]);
+
     const handlers = {
         UNDO: (event?: KeyboardEvent) => {
             event?.preventDefault();
@@ -242,19 +323,6 @@ export default function TouchAnnotationHeader(): JSX.Element {
             label: 'Guide',
             onClick: () => openGuide(),
         }] : []),
-        {
-            key: 'fullscreen',
-            label: 'Fullscreen',
-            onClick: () => {
-                if (window.document.fullscreenEnabled) {
-                    if (window.document.fullscreenElement) {
-                        window.document.exitFullscreen();
-                    } else {
-                        window.document.documentElement.requestFullscreen();
-                    }
-                }
-            },
-        },
         {
             key: 'play',
             label: playing ? 'Pause' : 'Play',
@@ -366,6 +434,7 @@ export default function TouchAnnotationHeader(): JSX.Element {
                 >
                     <RightOutlined />
                 </Button>
+                <AlignedViewSelector />
             </div>
             <div className='cvat-touch-header-cluster'>
                 <Button
@@ -376,6 +445,16 @@ export default function TouchAnnotationHeader(): JSX.Element {
                 >
                     <UnorderedListOutlined />
                 </Button>
+                {fullscreenAvailable ? (
+                    <Button
+                        type='link'
+                        className={`cvat-annotation-header-button ${fullscreen ? 'cvat-button-active' : ''}`}
+                        onClick={toggleFullscreen}
+                        aria-label={fullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
+                    >
+                        {fullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
+                    </Button>
+                ) : null}
                 <Dropdown menu={{ items: moreItems }} trigger={['click']} placement='bottomRight'>
                     <Button type='link' className='cvat-annotation-header-button' aria-label='More'>
                         <EllipsisOutlined />

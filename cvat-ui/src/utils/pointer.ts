@@ -28,6 +28,12 @@ export function isTouchLayout(): boolean {
 
 const ANNOTATION_VIEWPORT =
     'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
+const TOUCH_SCROLLABLE_SELECTOR = [
+    '.ant-drawer-body',
+    '.ant-dropdown-menu',
+    '.cvat-touch-dock-rail',
+    '.cvat-touch-inline-tools',
+].join(',');
 
 export function lockAnnotationViewport(): () => void {
     const meta = document.querySelector('meta[name="viewport"]');
@@ -37,9 +43,28 @@ export function lockAnnotationViewport(): () => void {
     }
     document.documentElement.classList.add('cvat-annotation-session');
     document.body.classList.add('cvat-annotation-session');
-    if (isTouchLayout()) {
+    const touchLayout = isTouchLayout();
+    const preventBrowserGesture = (event: TouchEvent): void => {
+        if (!event.cancelable) {
+            return;
+        }
+        const target = event.target instanceof Element ? event.target : null;
+        if (!target?.closest(TOUCH_SCROLLABLE_SELECTOR)) {
+            event.preventDefault();
+        }
+    };
+    const preventGestureEvent = (event: Event): void => {
+        if (event.cancelable) {
+            event.preventDefault();
+        }
+    };
+
+    if (touchLayout) {
         document.documentElement.classList.add('cvat-touch-layout');
         document.body.classList.add('cvat-touch-layout');
+        document.addEventListener('touchmove', preventBrowserGesture, { passive: false });
+        document.addEventListener('gesturestart', preventGestureEvent, { passive: false });
+        document.addEventListener('gesturechange', preventGestureEvent, { passive: false });
     }
 
     return () => {
@@ -50,5 +75,10 @@ export function lockAnnotationViewport(): () => void {
         document.body.classList.remove('cvat-annotation-session');
         document.documentElement.classList.remove('cvat-touch-layout');
         document.body.classList.remove('cvat-touch-layout');
+        if (touchLayout) {
+            document.removeEventListener('touchmove', preventBrowserGesture);
+            document.removeEventListener('gesturestart', preventGestureEvent);
+            document.removeEventListener('gesturechange', preventGestureEvent);
+        }
     };
 }

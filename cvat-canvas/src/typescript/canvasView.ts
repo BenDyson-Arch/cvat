@@ -401,6 +401,15 @@ export class CanvasViewImpl implements CanvasView, Listener {
                     initialState: undefined,
                     redraw: undefined,
                 });
+                this.canvas.dispatchEvent(
+                    new CustomEvent('canvas.drawstart', {
+                        bubbles: false,
+                        cancelable: true,
+                        detail: {
+                            drawData: prevDrawData,
+                        },
+                    }),
+                );
             }, 0);
         } else if (continueDraw) {
             this.canvas.dispatchEvent(
@@ -2001,7 +2010,7 @@ export class CanvasViewImpl implements CanvasView, Listener {
         }
     };
 
-    private dispatchCursorMoved(clientX: number, clientY: number): void {
+    private dispatchCursorMoved(clientX: number, clientY: number, isTap = false): void {
         if (this.mode !== Mode.IDLE || this.isImageLoading) {
             return;
         }
@@ -2014,6 +2023,10 @@ export class CanvasViewImpl implements CanvasView, Listener {
                 x: x - offset,
                 y: y - offset,
                 states: this.controller.objects,
+                clientX,
+                clientY,
+                scale: this.geometry.scale,
+                isTap,
             },
         }));
     }
@@ -2269,14 +2282,21 @@ export class CanvasViewImpl implements CanvasView, Listener {
                 this.controller.zoom(point[0] - offset, point[1] - offset, clamp(deltaY, -8, 8));
                 this.dispatchZoomEvent();
             },
-            tap: (clientX, clientY) => this.dispatchCursorMoved(clientX, clientY),
+            tap: (clientX, clientY) => this.dispatchCursorMoved(clientX, clientY, true),
             longPress: (clientX, clientY) => {
-                this.canvas.dispatchEvent(new MouseEvent('contextmenu', {
-                    bubbles: true,
+                const { offset } = this.controller.geometry;
+                const [x, y] = translateToSVG(this.content, [clientX, clientY]);
+                this.canvas.dispatchEvent(new CustomEvent('canvas.longpress', {
+                    bubbles: false,
                     cancelable: true,
-                    clientX,
-                    clientY,
-                    view: window,
+                    detail: {
+                        x: x - offset,
+                        y: y - offset,
+                        clientX,
+                        clientY,
+                        scale: this.geometry.scale,
+                        states: this.controller.objects,
+                    },
                 }));
             },
             drawPointer: (event) => this.handleNativeDrawPointer(event),

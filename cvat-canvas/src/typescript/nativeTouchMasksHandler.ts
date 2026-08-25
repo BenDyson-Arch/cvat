@@ -21,6 +21,8 @@ interface MaskBBox {
     bottom: number;
 }
 
+const FILL_BOUNDARY_ALPHA = 128;
+
 type DrawDoneCallback = (
     data: object | null,
     duration?: number,
@@ -298,26 +300,26 @@ export class NativeTouchMasksHandler {
         const visited = new Uint8Array(width * height);
         const spans: [number, number, number][] = [];
         const stack: [number, number][] = [[seedX, seedY]];
-        const isTransparent = (x: number, y: number): boolean => {
+        const isFillable = (x: number, y: number): boolean => {
             const index = y * width + x;
-            return !visited[index] && before.data[index * 4 + 3] === 0;
+            return !visited[index] && before.data[index * 4 + 3] < FILL_BOUNDARY_ALPHA;
         };
 
-        if (!isTransparent(seedX, seedY)) {
+        if (!isFillable(seedX, seedY)) {
             return false;
         }
 
         while (stack.length) {
             const [x, y] = stack.pop() as [number, number];
-            if (!isTransparent(x, y)) {
+            if (!isFillable(x, y)) {
                 continue;
             }
             let left = x;
             let right = x;
-            while (left > 0 && isTransparent(left - 1, y)) {
+            while (left > 0 && isFillable(left - 1, y)) {
                 left -= 1;
             }
-            while (right < width - 1 && isTransparent(right + 1, y)) {
+            while (right < width - 1 && isFillable(right + 1, y)) {
                 right += 1;
             }
             if (left === 0 || right === width - 1 || y === 0 || y === height - 1) {
@@ -332,12 +334,12 @@ export class NativeTouchMasksHandler {
             for (const neighborY of [y - 1, y + 1]) {
                 let cursor = left;
                 while (cursor <= right) {
-                    while (cursor <= right && !isTransparent(cursor, neighborY)) {
+                    while (cursor <= right && !isFillable(cursor, neighborY)) {
                         cursor += 1;
                     }
                     if (cursor <= right) {
                         stack.push([cursor, neighborY]);
-                        while (cursor <= right && isTransparent(cursor, neighborY)) {
+                        while (cursor <= right && isFillable(cursor, neighborY)) {
                             cursor += 1;
                         }
                     }

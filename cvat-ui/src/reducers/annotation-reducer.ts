@@ -124,6 +124,8 @@ const defaultState: AnnotationState = {
         },
         navigationType: NavigationType.REGULAR,
         activeViewIndex: 0,
+        pendingViewIndex: null,
+        activeViewLoading: false,
         ranges: '',
         playing: false,
         frameAngles: [],
@@ -324,6 +326,8 @@ export default (state = defaultState, action: AnyAction): AnnotationState => {
                     },
                     frameAngles: Array(job.stopFrame - job.startFrame + 1).fill(0),
                     activeViewIndex: 0,
+                    pendingViewIndex: null,
+                    activeViewLoading: false,
                 },
                 drawing: {
                     ...state.drawing,
@@ -422,6 +426,8 @@ export default (state = defaultState, action: AnyAction): AnnotationState => {
                     ...state.player,
                     activeViewIndex: state.player.activeViewIndex <= relatedFiles ?
                         state.player.activeViewIndex : 0,
+                    pendingViewIndex: null,
+                    activeViewLoading: false,
                     frame: {
                         data,
                         filename,
@@ -481,11 +487,15 @@ export default (state = defaultState, action: AnyAction): AnnotationState => {
             };
         }
         case AnnotationActionTypes.SET_ACTIVE_VIEW: {
+            if (action.payload.activeViewIndex === state.player.activeViewIndex) {
+                return state;
+            }
             return {
                 ...state,
                 player: {
                     ...state.player,
-                    activeViewIndex: action.payload.activeViewIndex,
+                    pendingViewIndex: action.payload.activeViewIndex,
+                    activeViewLoading: true,
                 },
             };
         }
@@ -574,6 +584,9 @@ export default (state = defaultState, action: AnyAction): AnnotationState => {
                 ...state,
                 player: {
                     ...state.player,
+                    activeViewIndex: state.player.pendingViewIndex ?? state.player.activeViewIndex,
+                    pendingViewIndex: null,
+                    activeViewLoading: false,
                     frame: {
                         ...state.player.frame,
                         changeFrameEvent: null,

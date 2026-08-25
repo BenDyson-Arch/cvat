@@ -1457,6 +1457,19 @@ def _collect_image_dataset_descriptors(
     return images, manifest
 
 
+def _group_direct_upload_as_aligned_views(
+    images: list[models.Image],
+    related_images: dict[str, Sequence[str]],
+) -> tuple[list[models.Image], dict[str, Sequence[str]]]:
+    if len(images) <= 1 or any(related_images.values()):
+        return images, related_images
+
+    primary_image, *aligned_views = images
+    return [primary_image], {
+        primary_image.path: [aligned_view.path for aligned_view in aligned_views],
+    }
+
+
 def _create_image_task_media_descriptors(
     db_task: models.Task,
     *,
@@ -1465,7 +1478,7 @@ def _create_image_task_media_descriptors(
     upload_dir: Path,
     is_data_in_cloud: bool,
     extractor: IMediaReader,
-    related_images: dict[str, Sequence[dict[str, Any]]],
+    related_images: dict[str, Sequence[str]],
     job_file_mapping: JobFileMapping | None,
 ) -> tuple[list[models.Image], ImageManifestManager, JobFileMapping | None]:
     db_data = db_task.require_data()
@@ -1477,6 +1490,10 @@ def _create_image_task_media_descriptors(
         db_task=db_task,
         is_data_in_cloud=is_data_in_cloud,
     )
+
+    if db_task.effective_related_image_mode == models.RelatedImageMode.ALIGNED:
+        images, related_images = _group_direct_upload_as_aligned_views(images, related_images)
+
     db_data.size = len(images)
 
     job_file_mapping, images = _allocate_honeypots(

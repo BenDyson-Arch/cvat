@@ -8,6 +8,7 @@ import pytest
 
 from cvat.apps.engine import models
 from cvat.apps.engine.annotation_profiles import validate_annotations_for_profile
+from cvat.apps.engine.task import _group_direct_upload_as_aligned_views
 
 
 @pytest.mark.parametrize(
@@ -78,3 +79,36 @@ def test_annotation_profile_rejects_incompatible_objects(profile, tags, shapes, 
             profile=profile,
             annotations=SimpleNamespace(tags=tags, shapes=shapes, tracks=tracks, intervals=[]),
         )
+
+
+def test_direct_aligned_upload_uses_first_image_as_primary_view():
+    images = [
+        models.Image(path="primary.png", frame=0),
+        models.Image(path="alternate-a.png", frame=1),
+        models.Image(path="alternate-b.png", frame=2),
+    ]
+
+    primary_images, related_images = _group_direct_upload_as_aligned_views(images, {})
+
+    assert primary_images == [images[0]]
+    assert related_images == {
+        "primary.png": ["alternate-a.png", "alternate-b.png"],
+    }
+
+
+def test_existing_related_image_groups_are_not_regrouped():
+    images = [
+        models.Image(path="frame-a/primary.png", frame=0),
+        models.Image(path="frame-b/primary.png", frame=1),
+    ]
+    existing_related_images = {
+        "frame-a/primary.png": ["frame-a/alternate.png"],
+        "frame-b/primary.png": ["frame-b/alternate.png"],
+    }
+
+    primary_images, related_images = _group_direct_upload_as_aligned_views(
+        images, existing_related_images
+    )
+
+    assert primary_images == images
+    assert related_images == existing_related_images

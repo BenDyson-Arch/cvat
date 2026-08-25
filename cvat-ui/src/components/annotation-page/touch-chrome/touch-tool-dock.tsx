@@ -41,6 +41,7 @@ export default function TouchToolDock(): JSX.Element {
     }));
 
     const drawing = DRAW_CONTROLS.has(activeControl);
+    const editing = activeControl === ActiveControl.EDIT;
     const selecting = activeControl === ActiveControl.CURSOR;
     const canFinish = finishDrawAvailable(activeControl);
     const canUndoPoint = [
@@ -123,7 +124,7 @@ export default function TouchToolDock(): JSX.Element {
                         </div>
                     ) : null}
                 <div id={TOUCH_DOCK_EXTRAS_ID} className='cvat-touch-dock-extras' />
-                {drawing && canvasInstance instanceof Canvas ? (
+                {(drawing || editing) && canvasInstance instanceof Canvas ? (
                     <Button
                         type='primary'
                         danger

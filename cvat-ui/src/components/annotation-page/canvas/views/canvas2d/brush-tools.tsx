@@ -79,10 +79,12 @@ const componentShortcuts = {
 registerComponentShortcuts(componentShortcuts);
 
 const MIN_BRUSH_SIZE = 1;
+const DEFAULT_DESKTOP_BRUSH_SIZE = 10;
+const DEFAULT_TOUCH_BRUSH_SIZE = 40;
 function BrushTools(): JSX.Element | React.ReactPortal | null {
     const dispatch = useDispatch();
     const {
-        defaultLabelID, visible, canvasInstance, labels, activeObjectHidden, keyMap, normalizedKeyMap,
+        defaultLabelID, visible, canvasInstance, labels, activeObjectHidden, keyMap, normalizedKeyMap, isSaving,
     } = useSelector((state: CombinedState) => ({
         defaultLabelID: state.annotation.drawing.activeLabelID,
         visible: state.annotation.canvas.brushTools.visible,
@@ -91,6 +93,7 @@ function BrushTools(): JSX.Element | React.ReactPortal | null {
         activeObjectHidden: state.annotation.canvas.activeObjectHidden,
         keyMap: state.shortcuts.keyMap,
         normalizedKeyMap: state.shortcuts.normalizedKeyMap,
+        isSaving: state.annotation.annotations.saving.uploading,
     }), shallowEqual);
 
     const [editableState, setEditableState] = useState<any | null>(null);
@@ -99,7 +102,9 @@ function BrushTools(): JSX.Element | React.ReactPortal | null {
     >('brush');
     const [brushForm, setBrushForm] = useState<'circle' | 'square'>('circle');
     const [[top, left], setTopLeft] = useState([0, 0]);
-    const [brushSize, setBrushSize] = useState(10);
+    const [brushSize, setBrushSize] = useState(
+        () => (isTouchLayout() ? DEFAULT_TOUCH_BRUSH_SIZE : DEFAULT_DESKTOP_BRUSH_SIZE),
+    );
     const [applicableLabels, setApplicableLabels] = useState<Label[]>([]);
 
     const [blockedTools, setBlockedTools] = useState<Record<'eraser' | 'polygon-minus', boolean>>({
@@ -108,11 +113,7 @@ function BrushTools(): JSX.Element | React.ReactPortal | null {
     });
 
     const setBrushTool = useCallback(() => setCurrentTool('brush'), [setCurrentTool]);
-    const setEraserTool = useCallback(() => {
-        if (!blockedTools.eraser) {
-            setCurrentTool('eraser');
-        }
-    }, [setCurrentTool, blockedTools.eraser]);
+    const setEraserTool = useCallback(() => setCurrentTool('eraser'), [setCurrentTool]);
     const setFillTool = useCallback(() => setCurrentTool('fill'), [setCurrentTool]);
     const setPolygonTool = useCallback(() => setCurrentTool('polygon-plus'), [setCurrentTool]);
     const setPolygonRemoveTool = useCallback(() => {
@@ -236,7 +237,11 @@ function BrushTools(): JSX.Element | React.ReactPortal | null {
             }
         };
 
-        const hideToolset = (): void => {
+        const hideToolset = (event: Event): void => {
+            const canvasEvent = event as CustomEvent;
+            if (canvasEvent.type === 'canvas.drawn' && canvasEvent.detail?.continue) {
+                return;
+            }
             if (visible) {
                 dispatch(updateCanvasBrushTools({ visible: false }));
             }
@@ -323,7 +328,6 @@ function BrushTools(): JSX.Element | React.ReactPortal | null {
                                 ['cvat-brush-tools-active-tool'] : [])].join(' ')}
                             icon={<Icon component={EraserIcon} />}
                             onClick={setEraserTool}
-                            disabled={blockedTools.eraser}
                         />
                         <Button
                             type='text'
@@ -358,16 +362,22 @@ function BrushTools(): JSX.Element | React.ReactPortal | null {
                 {ReactDOM.createPortal((
                     <div
                         className='cvat-touch-next-action'
-                        style={{ display: visible && !editableState ? '' : 'none' }}
+                        style={{ display: visible ? '' : 'none' }}
                     >
-                        <CVATTooltip title={`Next ${normalizedKeyMap.SWITCH_REDRAW_MODE_STANDARD_CONTROLS}`}>
+                        <CVATTooltip title={editableState ?
+                            'Save annotation changes' :
+                            `Next ${normalizedKeyMap.SWITCH_REDRAW_MODE_STANDARD_CONTROLS}`}
+                        >
                             <Button
                                 type='primary'
-                                aria-label='Next annotation'
+                                aria-label={editableState ? 'Save annotation changes' : 'Next annotation'}
+                                disabled={isSaving}
                                 className='cvat-brush-tools-continue'
                                 icon={<Icon component={PlusIcon} />}
                                 onClick={() => {
-                                    if (canvasInstance instanceof Canvas && defaultLabelID) {
+                                    if (canvasInstance instanceof Canvas && editableState) {
+                                        canvasInstance.edit({ enabled: false });
+                                    } else if (canvasInstance instanceof Canvas && defaultLabelID) {
                                         canvasInstance.draw({ enabled: false, continue: true });
                                         dispatch(
                                             rememberObject({
@@ -426,7 +436,6 @@ function BrushTools(): JSX.Element | React.ReactPortal | null {
                     className={['cvat-brush-tools-eraser', ...(currentTool === 'eraser' ? ['cvat-brush-tools-active-tool'] : [])].join(' ')}
                     icon={<Icon component={EraserIcon} />}
                     onClick={setEraserTool}
-                    disabled={blockedTools.eraser}
                 />
             </CVATTooltip>
             {!touchLayout ? (
@@ -526,7 +535,7 @@ function BrushTools(): JSX.Element | React.ReactPortal | null {
                 <CVATTooltip title={`Continue ${normalizedKeyMap.SWITCH_REDRAW_MODE_STANDARD_CONTROLS}`}>
                     <Button
                         type={touchLayout ? 'primary' : 'text'}
-                        disabled={!!editableState}
+                        disabled={!!editableState || isSaving}
                         className='cvat-brush-tools-continue'
                         icon={<Icon component={PlusIcon} />}
                         onClick={() => {
