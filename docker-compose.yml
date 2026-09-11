@@ -302,7 +302,7 @@ services:
     #   traefik.http.routers.dashboard.service: api@internal
     #   traefik.http.routers.dashboard.rule: Host(`${CVAT_HOST:-localhost}`)
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock:ro
       - ./components/analytics/grafana_conf.yml:/etc/traefik/rules/grafana_conf.yml:ro
     networks:
       - cvat
