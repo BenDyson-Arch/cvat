@@ -43,6 +43,16 @@ interface Props {
     removeAnnotationsConfirmComponent?: React.ComponentType<RemoveAnnotationsConfirmProps>;
 }
 
+interface LocalJobMenuActions {
+    readonly localMode: true;
+    exportLocalAnnotations(): Promise<void>;
+}
+
+function isLocalJob(job: Job): job is Job & LocalJobMenuActions {
+    const candidate = job as Partial<LocalJobMenuActions>;
+    return candidate.localMode === true && typeof candidate.exportLocalAnnotations === 'function';
+}
+
 function AnnotationMenuComponent(props: Props): JSX.Element {
     const {
         removeAnnotationsConfirmComponent: RemoveAnnotationsConfirmComponent = RemoveAnnotationsConfirm,
@@ -57,14 +67,23 @@ function AnnotationMenuComponent(props: Props): JSX.Element {
         { jobInstance },
     );
     const { stopFrame } = jobInstance;
+    const localJob = isLocalJob(jobInstance);
 
     useEffect(() => {
         setJobState(jobInstance.state);
     }, [jobInstance.state]);
 
     const exportDataset = useCallback(() => {
+        if (isLocalJob(jobInstance)) {
+            jobInstance.exportLocalAnnotations()
+                .then(() => message.success('Annotations exported'))
+                .catch((error: unknown) => {
+                    message.error(`Could not export annotations: ${error instanceof Error ? error.message : 'Unknown error'}`);
+                });
+            return;
+        }
         dispatch(exportActions.openExportDatasetModal(jobInstance));
-    }, [jobInstance]);
+    }, [dispatch, jobInstance, localJob]);
 
     const finishJob = useCallback(() => {
         dispatch(finishCurrentJobAsync(() => {
@@ -139,15 +158,17 @@ function AnnotationMenuComponent(props: Props): JSX.Element {
         type: 'divider',
     }, 4]);
 
-    menuItems.push([{
-        key: Actions.LOAD_JOB_ANNO,
-        label: 'Upload annotations',
-        onClick: uploadAnnotations,
-    }, 10]);
+    if (!localJob) {
+        menuItems.push([{
+            key: Actions.LOAD_JOB_ANNO,
+            label: 'Upload annotations',
+            onClick: uploadAnnotations,
+        }, 10]);
+    }
 
     menuItems.push([{
         key: Actions.EXPORT_JOB_DATASET,
-        label: 'Export job dataset',
+        label: localJob ? 'Export annotations' : 'Export job dataset',
         onClick: exportDataset,
     }, 20]);
 
@@ -157,55 +178,57 @@ function AnnotationMenuComponent(props: Props): JSX.Element {
         onClick: () => setRemoveAnnotationsConfirmOpen(true),
     }, 30]);
 
-    menuItems.push([{
-        key: Actions.RUN_ACTIONS,
-        label: 'Run actions',
-        onClick: () => {
-            openAnnotationsActionModal();
-        },
-    }, 40]);
+    if (!localJob) {
+        menuItems.push([{
+            key: Actions.RUN_ACTIONS,
+            label: 'Run actions',
+            onClick: () => {
+                openAnnotationsActionModal();
+            },
+        }, 40]);
 
-    menuItems.push([{
-        key: 'job-state-submenu',
-        popupClassName: 'cvat-annotation-menu-job-state-submenu',
-        label: 'Change job state',
-        children: [{
-            key: `state:${JobState.NEW}`,
-            label: JobState.NEW,
-            className: computeClassName(JobState.NEW),
-            onClick: changeJobState(JobState.NEW),
-        }, {
-            key: `state:${JobState.IN_PROGRESS}`,
-            label: JobState.IN_PROGRESS,
-            className: computeClassName(JobState.IN_PROGRESS),
-            onClick: changeJobState(JobState.IN_PROGRESS),
-        }, {
-            key: `state:${JobState.REJECTED}`,
-            label: JobState.REJECTED,
-            className: computeClassName(JobState.REJECTED),
-            onClick: changeJobState(JobState.REJECTED),
-        }, {
-            key: `state:${JobState.COMPLETED}`,
-            label: JobState.COMPLETED,
-            className: computeClassName(JobState.COMPLETED),
-            onClick: changeJobState(JobState.COMPLETED),
-        }],
-    }, 60]);
+        menuItems.push([{
+            key: 'job-state-submenu',
+            popupClassName: 'cvat-annotation-menu-job-state-submenu',
+            label: 'Change job state',
+            children: [{
+                key: `state:${JobState.NEW}`,
+                label: JobState.NEW,
+                className: computeClassName(JobState.NEW),
+                onClick: changeJobState(JobState.NEW),
+            }, {
+                key: `state:${JobState.IN_PROGRESS}`,
+                label: JobState.IN_PROGRESS,
+                className: computeClassName(JobState.IN_PROGRESS),
+                onClick: changeJobState(JobState.IN_PROGRESS),
+            }, {
+                key: `state:${JobState.REJECTED}`,
+                label: JobState.REJECTED,
+                className: computeClassName(JobState.REJECTED),
+                onClick: changeJobState(JobState.REJECTED),
+            }, {
+                key: `state:${JobState.COMPLETED}`,
+                label: JobState.COMPLETED,
+                className: computeClassName(JobState.COMPLETED),
+                onClick: changeJobState(JobState.COMPLETED),
+            }],
+        }, 60]);
 
-    menuItems.push([{
-        key: Actions.FINISH_JOB,
-        label: 'Finish the job',
-        onClick: () => {
-            Modal.confirm({
-                title: 'Would you like to finish the job?',
-                content: 'It will save annotations and set the job state to "completed"',
-                okText: 'Continue',
-                cancelText: 'Cancel',
-                className: 'cvat-modal-content-finish-job',
-                onOk: finishJob,
-            });
-        },
-    }, 70]);
+        menuItems.push([{
+            key: Actions.FINISH_JOB,
+            label: 'Finish the job',
+            onClick: () => {
+                Modal.confirm({
+                    title: 'Would you like to finish the job?',
+                    content: 'It will save annotations and set the job state to "completed"',
+                    okText: 'Continue',
+                    cancelText: 'Cancel',
+                    className: 'cvat-modal-content-finish-job',
+                    onOk: finishJob,
+                });
+            },
+        }, 70]);
+    }
 
     menuItems.push(
         ...pluginActions.map(({ component: Component, weight }, index) => {

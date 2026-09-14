@@ -1,0 +1,9 @@
+{
+  "appId": "org.cvat.local",
+  "appName": "CVAT Local",
+  "webDir": "dist",
+  "ios": {
+    "contentInset": "never",
+    "preferredContentMode": "mobile"
+  }
+}

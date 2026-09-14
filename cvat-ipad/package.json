@@ -1,0 +1,28 @@
+{
+  "name": "cvat-ipad",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local aligned-image annotation app using the CVAT canvas",
+  "scripts": {
+    "build": "cd ../cvat-ui && ../node_modules/.bin/webpack --config ../cvat-ipad/webpack.config.cjs --mode production",
+    "start": "cd ../cvat-ui && ../node_modules/.bin/webpack serve --config ../cvat-ipad/webpack.config.cjs --mode development",
+    "type-check": "../node_modules/.bin/tsc -p tsconfig.json",
+    "ios:add": "cap add ios",
+    "ios:sync": "npm run build && cap sync ios",
+    "ios:open": "cap open ios",
+    "test": "node --test tests/*.test.cjs",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.5.2",
+    "@capacitor/filesystem": "^8.0.0",
+    "@capacitor/ios": "8.5.2",
+    "@capacitor/share": "^8.0.0",
+    "@fontsource-variable/roboto-flex": "^5.3.0",
+    "@fontsource/sora": "^5.3.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2",
+    "@playwright/test": "^1.58.0"
+  }
+}

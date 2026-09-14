@@ -22,6 +22,7 @@ interface MaskBBox {
 }
 
 const FILL_BOUNDARY_ALPHA = 128;
+const MAX_HISTORY_BYTES = 64 * 1024 * 1024;
 
 type DrawDoneCallback = (
     data: object | null,
@@ -61,6 +62,7 @@ export class NativeTouchMasksHandler {
     private strokeBefore: ImageData | null = null;
     private undoStack: ImageData[] = [];
     private redoStack: ImageData[] = [];
+    private historyBytes = 0;
     private pendingPoints: RasterPoint[] = [];
     private animationFrame: number | null = null;
     private lastPoint: RasterPoint | null = null;
@@ -247,7 +249,8 @@ export class NativeTouchMasksHandler {
         }
         this.abortStroke();
         const previous = this.undoStack.pop() as ImageData;
-        this.redoStack.push(this.snapshot());
+        this.historyBytes -= this.snapshotBytes(previous);
+        this.pushRedo(this.snapshot());
         this.context.putImageData(previous, 0, 0);
         this.updateBlockedTools();
         return true;
@@ -259,7 +262,8 @@ export class NativeTouchMasksHandler {
         }
         this.abortStroke();
         const next = this.redoStack.pop() as ImageData;
-        this.undoStack.push(this.snapshot());
+        this.historyBytes -= this.snapshotBytes(next);
+        this.pushUndo(this.snapshot());
         this.context.putImageData(next, 0, 0);
         this.updateBlockedTools();
         return true;
@@ -281,8 +285,8 @@ export class NativeTouchMasksHandler {
         this.context.closePath();
         this.context.fill();
         this.context.restore();
-        this.undoStack.push(before);
-        this.redoStack = [];
+        this.clearRedo();
+        this.pushUndo(before);
         this.updateBlockedTools();
         return true;
     }
@@ -354,8 +358,8 @@ export class NativeTouchMasksHandler {
             this.context.fillRect(left, y, right - left + 1, 1);
         }
         this.context.restore();
-        this.undoStack.push(before);
-        this.redoStack = [];
+        this.clearRedo();
+        this.pushUndo(before);
         this.updateBlockedTools();
         return true;
     }
@@ -384,8 +388,7 @@ export class NativeTouchMasksHandler {
     private begin(drawData: DrawData): void {
         this.drawing = true;
         this.startedAt = Date.now();
-        this.undoStack = [];
-        this.redoStack = [];
+        this.clearHistory();
         this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
         this.loadInitialMask(drawData.initialState);
         this.canvas.style.display = 'block';
@@ -436,8 +439,7 @@ export class NativeTouchMasksHandler {
         this.drawData = null;
         this.tool = null;
         this.activePolygonTool = null;
-        this.undoStack = [];
-        this.redoStack = [];
+        this.clearHistory();
         if (this.animationFrame !== null) {
             window.cancelAnimationFrame(this.animationFrame);
             this.animationFrame = null;
@@ -544,8 +546,8 @@ export class NativeTouchMasksHandler {
 
     private completeStroke(): void {
         if (this.strokeBefore) {
-            this.undoStack.push(this.strokeBefore);
-            this.redoStack = [];
+            this.clearRedo();
+            this.pushUndo(this.strokeBefore);
         }
         this.strokeBefore = null;
         this.pointerID = null;
@@ -584,6 +586,48 @@ export class NativeTouchMasksHandler {
 
     private snapshot(): ImageData {
         return this.context.getImageData(0, 0, this.canvas.width, this.canvas.height);
+    }
+
+    private snapshotBytes(snapshot: ImageData): number {
+        return snapshot.data.byteLength;
+    }
+
+    private pushUndo(snapshot: ImageData): void {
+        this.undoStack.push(snapshot);
+        this.historyBytes += this.snapshotBytes(snapshot);
+        this.pruneHistory();
+    }
+
+    private pushRedo(snapshot: ImageData): void {
+        this.redoStack.push(snapshot);
+        this.historyBytes += this.snapshotBytes(snapshot);
+        this.pruneHistory();
+    }
+
+    private clearRedo(): void {
+        for (const snapshot of this.redoStack) {
+            this.historyBytes -= this.snapshotBytes(snapshot);
+        }
+        this.redoStack = [];
+    }
+
+    private clearHistory(): void {
+        this.undoStack = [];
+        this.redoStack = [];
+        this.historyBytes = 0;
+    }
+
+    private pruneHistory(): void {
+        // Keep the newest undo entries reachable first. If those are exhausted,
+        // discard the oldest redo entries as well so the cap is never exceeded.
+        while (this.historyBytes > MAX_HISTORY_BYTES && this.undoStack.length) {
+            const oldest = this.undoStack.shift() as ImageData;
+            this.historyBytes -= this.snapshotBytes(oldest);
+        }
+        while (this.historyBytes > MAX_HISTORY_BYTES && this.redoStack.length) {
+            const oldest = this.redoStack.shift() as ImageData;
+            this.historyBytes -= this.snapshotBytes(oldest);
+        }
     }
 
     private findMaskBBox(): MaskBBox | null {
