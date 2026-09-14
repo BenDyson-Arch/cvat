@@ -74,10 +74,14 @@ export default function TouchObjectControls(): JSX.Element | null {
         <div className='cvat-touch-object-controls'>
             <LabelSelector
                 className='cvat-touch-object-label-selector'
+                popupClassName='cvat-touch-scrollable-select'
                 aria-label='Change annotation class'
                 labels={applicableLabels}
                 value={objectState.label.id}
                 disabled={editing || isSaving}
+                placement='topLeft'
+                listHeight={280}
+                showSearch={false}
                 onChange={changeLabel}
             />
             {canEdit ? (

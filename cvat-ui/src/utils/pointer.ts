@@ -30,9 +30,20 @@ const ANNOTATION_VIEWPORT =
     'width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover';
 const TOUCH_SCROLLABLE_SELECTOR = [
     '.ant-drawer-body',
+    '.ant-dropdown',
     '.ant-dropdown-menu',
+    '.ant-select-dropdown',
+    '.rc-virtual-list-holder',
+    '.ant-popover',
+    '.ant-popover-inner-content',
+    '.ant-modal-wrap',
+    '.ant-modal-body',
     '.cvat-touch-dock-rail',
+    '.cvat-touch-dock-extras',
     '.cvat-touch-inline-tools',
+    '.cvat-touch-tool-dock',
+    '.cvat-brush-tools-toolbox',
+    '.cvat-touch-brush-palette',
 ].join(',');
 
 export function lockAnnotationViewport(): () => void {

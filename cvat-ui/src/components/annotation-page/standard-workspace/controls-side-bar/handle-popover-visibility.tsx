@@ -6,6 +6,8 @@
 import React from 'react';
 import Popover, { PopoverProps } from 'antd/lib/popover';
 
+import { isTouchLayout } from 'utils/pointer';
+
 interface OwnProps {
     overlayClassName?: string;
     onVisibleChange?: (visible: boolean) => void;
@@ -22,6 +24,7 @@ export default function withVisibilityHandling(WrappedComponent: typeof Popover,
         return (
             <WrappedComponent
                 {...rest}
+                {...(isTouchLayout() ? { placement: 'top' as const } : {})}
                 overlayStyle={{
                     ...(typeof overlayStyle === 'object' ? overlayStyle : {}),
                 }}

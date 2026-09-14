@@ -47,10 +47,60 @@ html.cvat-touch-layout {
     }
 
     .ant-drawer-body,
+    .ant-dropdown,
     .ant-dropdown-menu,
+    .ant-select-dropdown,
+    .ant-popover,
+    .ant-popover-inner-content,
+    .ant-modal-wrap,
+    .ant-modal-body,
     .cvat-touch-inline-tools,
-    .cvat-touch-tool-dock {
+    .cvat-touch-tool-dock,
+    .cvat-touch-dock-extras,
+    .cvat-brush-tools-toolbox,
+    .cvat-touch-brush-palette {
         overscroll-behavior: contain;
+        touch-action: manipulation;
+    }
+
+    .ant-dropdown .ant-dropdown-menu,
+    .cvat-touch-scrollable-dropdown .ant-dropdown-menu {
+        max-height: min(22.5rem, calc(100dvh - 10rem));
+        overflow-x: hidden;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+    }
+
+    .ant-select-dropdown {
+        .rc-virtual-list-holder,
+        .ant-select-dropdown-menu {
+            max-height: min(22.5rem, calc(100dvh - 10rem)) !important;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior: contain;
+            touch-action: pan-y;
+        }
+    }
+
+    .ant-popover .ant-popover-inner-content {
+        max-height: min(32rem, calc(100dvh - 10rem));
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
+    }
+
+    .ant-modal {
+        max-width: calc(100vw - 24px);
+    }
+
+    .ant-modal .ant-modal-body {
+        max-height: min(70dvh, calc(100dvh - 8rem));
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
     }
 
     .cvat-canvas-image-setups-trigger {
@@ -116,6 +166,11 @@ html.cvat-touch-layout {
         flex: 1;
         min-width: 0;
         gap: 2px;
+
+        .cvat-aligned-view-selector {
+            min-width: 0 !important;
+            max-width: 140px;
+        }
     }
 
     .cvat-touch-frame-button {
@@ -594,6 +649,24 @@ html.cvat-touch-layout {
         width: 12px;
         height: 12px;
         border-radius: 50%;
+    }
+}
+
+.cvat-touch-class-dropdown {
+    .ant-dropdown-menu-item {
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }
+}
+
+.cvat-touch-scrollable-select {
+    .rc-virtual-list-holder {
+        max-height: min(22.5rem, calc(100dvh - 10rem)) !important;
+        overflow-y: auto !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
     }
 }
 

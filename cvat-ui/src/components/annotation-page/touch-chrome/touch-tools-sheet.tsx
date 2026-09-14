@@ -138,7 +138,13 @@ export default function TouchToolsSheet(): JSX.Element {
                     clockwiseShortcut={normalizedKeyMap.CLOCKWISE_ROTATION_STANDARD_CONTROLS}
                     rotateFrame={(rotation: Rotation) => dispatch(rotateCurrentFrame(rotation))}
                 />
-                <Popover trigger='click' placement='top' overlayInnerStyle={{ padding: 0 }} content={<ImageSetupsContent />}>
+                <Popover
+                    trigger='click'
+                    placement='top'
+                    overlayClassName='cvat-touch-image-setups-popover'
+                    overlayInnerStyle={{ padding: 0 }}
+                    content={<ImageSetupsContent />}
+                >
                     <SettingOutlined className='cvat-touch-image-setups' aria-label='Image setups' />
                 </Popover>
             </div>

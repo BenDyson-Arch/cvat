@@ -7,6 +7,8 @@ const DUPLICATE_MOUSE_PX = 16;
 const LONG_PRESS_MS = 500;
 const TAP_MOVE_PX = 10;
 const MAX_PENCIL_TOUCH_CONTACT_PX = 12;
+const MIN_PALM_CONTACT_PX = 100;
+const PALM_HOLDOFF_MS = 200;
 
 interface RecentPointer {
     t: number;
@@ -32,11 +34,19 @@ export function pointerTypeOf(event: Event): PointerKind | null {
     return null;
 }
 
+function contactMajorAxis(event: PointerEvent): number {
+    return Math.max(event.width || 0, event.height || 0);
+}
+
+export function isLikelyPalmContact(event: PointerEvent): boolean {
+    return event.pointerType === 'touch' && contactMajorAxis(event) >= MIN_PALM_CONTACT_PX;
+}
+
 function isLikelyPencilDisguisedAsTouch(event: PointerEvent): boolean {
     // Some WebKit versions report Apple Pencil as touch. Its contact ellipse is
     // small, but can be quantized above 1px (especially at non-1 viewport scale).
     // A finger contact is substantially larger, so keep it on the gesture path.
-    if (event.pointerType !== 'touch') {
+    if (event.pointerType !== 'touch' || isLikelyPalmContact(event)) {
         return false;
     }
     const stylusEvent = event as PointerEvent & {
@@ -200,6 +210,7 @@ export class CanvasPointerRouter {
     private pointerKinds = new Map<number, CanvasPointerKind>();
     private ignoredPointers = new Set<number>();
     private activePenPointerId: number | null = null;
+    private lastPenContactAt = Number.NEGATIVE_INFINITY;
 
     constructor(callbacks: CanvasPointerRouterCallbacks) {
         this.callbacks = callbacks;
@@ -220,13 +231,14 @@ export class CanvasPointerRouter {
 
         if (phase === 'down') {
             const kind = isPenPointer(event) ? 'pen' : 'finger';
-            if (kind === 'finger' && this.activePenPointerId !== null) {
+            if (kind === 'finger' && this.shouldRejectPalm(event)) {
                 this.ignoredPointers.add(event.pointerId);
                 preventDefaultIfCancelable(event);
                 return true;
             }
             this.pointerKinds.set(event.pointerId, kind);
             if (kind === 'pen') {
+                this.lastPenContactAt = event.timeStamp;
                 for (const [pointerID, pointerKind] of this.pointerKinds) {
                     if (pointerKind === 'finger') {
                         this.pointerKinds.delete(pointerID);
@@ -252,15 +264,18 @@ export class CanvasPointerRouter {
         }
 
         if (kind === 'pen') {
+            const drawPhase = (
+                phase === 'cancel' && this.ignoredPointers.size > 0
+            ) ? 'up' : phase;
             const consumed = this.callbacks.drawPointer({
                 kind,
-                phase,
+                phase: drawPhase,
                 pointerId: event.pointerId,
                 clientX: event.clientX,
                 clientY: event.clientY,
                 canvasX,
                 canvasY,
-                pressure: penPressure(event, ['up', 'cancel'].includes(phase) ? 0 : 1),
+                pressure: penPressure(event, ['up', 'cancel'].includes(drawPhase) ? 0 : 1),
                 button: event.button,
                 buttons: event.buttons,
                 altKey: event.altKey,
@@ -290,6 +305,7 @@ export class CanvasPointerRouter {
             disguisedPencilPointers.delete(event.pointerId);
             if (this.activePenPointerId === event.pointerId) {
                 this.activePenPointerId = null;
+                this.lastPenContactAt = event.timeStamp;
             }
         }
         return true;
@@ -300,6 +316,15 @@ export class CanvasPointerRouter {
         this.pointerKinds.clear();
         this.ignoredPointers.clear();
         this.activePenPointerId = null;
+        this.lastPenContactAt = Number.NEGATIVE_INFINITY;
+    }
+
+    private shouldRejectPalm(event: PointerEvent): boolean {
+        return (
+            this.activePenPointerId !== null ||
+            isLikelyPalmContact(event) ||
+            event.timeStamp - this.lastPenContactAt < PALM_HOLDOFF_MS
+        );
     }
 }
 

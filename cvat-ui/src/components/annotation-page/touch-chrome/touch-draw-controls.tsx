@@ -29,6 +29,7 @@ import {
     applicableLabelsForShape, profileAllowsTracks, visibleShapesFromLabels,
 } from './visible-shapes';
 import { useTouchChrome } from './touch-chrome-context';
+import { TOUCH_DROPDOWN_MENU_STYLE } from './constants';
 
 const DRAW_TOOLS: {
     type: ShapeType;
@@ -162,6 +163,7 @@ export default function TouchDrawControls({ expanded }: { expanded: boolean }): 
     const selectedTool = availableTools.find((tool) => tool.type === selectedShape) || availableTools[0];
     const drawToolMenu = {
         selectedKeys: [selectedShape],
+        style: TOUCH_DROPDOWN_MENU_STYLE,
         items: availableTools.map((tool) => ({
             key: tool.type,
             icon: <Icon component={tool.icon} />,
@@ -185,7 +187,12 @@ export default function TouchDrawControls({ expanded }: { expanded: boolean }): 
             >
                 <Icon component={selectedTool.icon} />
             </Button>
-            <Dropdown trigger={['click']} menu={drawToolMenu}>
+            <Dropdown
+                trigger={['click']}
+                placement='topLeft'
+                overlayClassName='cvat-touch-scrollable-dropdown'
+                menu={drawToolMenu}
+            >
                 <Button
                     type='text'
                     className='cvat-touch-mode-selector-menu'
@@ -198,8 +205,11 @@ export default function TouchDrawControls({ expanded }: { expanded: boolean }): 
     const classSelector = classSelectorHost && selectedLabel ? ReactDOM.createPortal((
         <Dropdown
             trigger={['click']}
+            placement='topLeft'
+            overlayClassName='cvat-touch-scrollable-dropdown cvat-touch-class-dropdown'
             menu={{
                 selectedKeys: [`${selectedLabel.id}`],
+                style: TOUCH_DROPDOWN_MENU_STYLE,
                 items: labelsForShape.map((label) => ({
                     key: `${label.id}`,
                     label: (

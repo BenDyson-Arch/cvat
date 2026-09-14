@@ -1073,6 +1073,46 @@ context('Manipulations with masks', { scrollBehavior: false }, () => {
                 });
             });
             cy.get('#cvat_canvas_background').then(($background) => {
+                const initialLeft = $background[0].style.left;
+                cy.get('#cvat_canvas_wrapper')
+                    .trigger('pointerdown', {
+                        pointerId: 90,
+                        pointerType: 'touch',
+                        pressure: 0.5,
+                        width: 120,
+                        height: 120,
+                        button: 0,
+                        buttons: 1,
+                        clientX: 420,
+                        clientY: 500,
+                    })
+                    .trigger('pointermove', {
+                        pointerId: 90,
+                        pointerType: 'touch',
+                        pressure: 0.5,
+                        width: 120,
+                        height: 120,
+                        button: -1,
+                        buttons: 1,
+                        clientX: 520,
+                        clientY: 500,
+                    });
+                cy.get('#cvat_canvas_background').should(($unpanned) => {
+                    expect($unpanned[0].style.left).to.equal(initialLeft);
+                });
+                cy.get('#cvat_canvas_wrapper').trigger('pointerup', {
+                    pointerId: 90,
+                    pointerType: 'touch',
+                    pressure: 0,
+                    width: 120,
+                    height: 120,
+                    button: 0,
+                    buttons: 0,
+                    clientX: 520,
+                    clientY: 500,
+                });
+            });
+            cy.get('#cvat_canvas_background').then(($background) => {
                 const initialTransform = $background[0].style.transform;
                 cy.get('#cvat_canvas_wrapper')
                     .trigger('pointerdown', {

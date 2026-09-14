@@ -40,6 +40,7 @@ import {
     switchPlay,
     undoActionAsync,
 } from 'actions/annotation-actions';
+import { switchSettingsModalVisible } from 'actions/settings-actions';
 import AnnotationMenuComponent from 'components/annotation-page/top-bar/annotation-menu';
 import AlignedViewSelector from 'components/annotation-page/top-bar/aligned-view-selector';
 import SaveAnnotationsButton from 'components/annotation-page/top-bar/save-annotations-button';
@@ -53,6 +54,7 @@ import { isIPadLike } from 'utils/pointer';
 import { writeLatestFrame } from 'utils/remember-latest-frame';
 import config from 'config';
 import { useTouchChrome } from './touch-chrome-context';
+import { TOUCH_DROPDOWN_MENU_STYLE } from './constants';
 
 const headerShortcuts = {
     UNDO: {
@@ -318,6 +320,11 @@ export default function TouchAnnotationHeader(): JSX.Element {
                 dispatch(showStatisticsAction(true));
             },
         },
+        {
+            key: 'settings',
+            label: 'Settings',
+            onClick: () => dispatch(switchSettingsModalVisible(true)),
+        },
         ...(jobInstance.guideId !== null ? [{
             key: 'guide',
             label: 'Guide',
@@ -455,7 +462,16 @@ export default function TouchAnnotationHeader(): JSX.Element {
                         {fullscreen ? <FullscreenExitOutlined /> : <FullscreenOutlined />}
                     </Button>
                 ) : null}
-                <Dropdown menu={{ items: moreItems }} trigger={['click']} placement='bottomRight'>
+                <Dropdown
+                    menu={{
+                        items: moreItems,
+                        triggerSubMenuAction: 'click',
+                        style: TOUCH_DROPDOWN_MENU_STYLE,
+                    }}
+                    trigger={['click']}
+                    placement='bottomRight'
+                    overlayClassName='cvat-touch-scrollable-dropdown'
+                >
                     <Button type='link' className='cvat-annotation-header-button' aria-label='More'>
                         <EllipsisOutlined />
                     </Button>

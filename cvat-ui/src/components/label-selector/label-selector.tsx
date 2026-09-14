@@ -48,9 +48,9 @@ export default function LabelSelector(props: Props): JSX.Element {
     return (
         <Select
             virtual={false}
+            showSearch
             {...rest}
             {...dynamicProps}
-            showSearch
             filterOption={(input: string, option) => {
                 if (option) {
                     const { title } = option.props;
